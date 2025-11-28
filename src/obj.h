@@ -6,6 +6,7 @@
 typedef struct obj_t {
     GLuint vao;
     GLuint vbo;
+    GLuint vbo_dynamic;
     mat4 m;
     size_t cols;
     size_t rows;
@@ -18,4 +19,6 @@ void obj_dtor(obj_p obj);
 
 obj_p obj_cloud();
 void obj_render(obj_p obj);
+void obj_update_dynamic(obj_p obj);
+
 

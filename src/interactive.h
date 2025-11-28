@@ -3,5 +3,5 @@
 typedef struct GLFWwindow GLFWwindow;
 void interactive_init(GLFWwindow* win);
 
-int mouse_x;
-int mouse_y;
+extern int mouse_x;
+extern int mouse_y;

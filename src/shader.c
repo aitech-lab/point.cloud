@@ -40,14 +40,15 @@ shader_ctor(char* shader_name) {
     glDeleteShader(vert_id);
     glDeleteShader(frag_id);
     
-    shader->mvp = glGetUniformLocation(shader->prog, "mvp");
-    shader->rot = glGetUniformLocation(shader->prog, "rot");
-    shader->off = glGetUniformLocation(shader->prog, "off");
-    shader->min = glGetUniformLocation(shader->prog, "min");
-    shader->max = glGetUniformLocation(shader->prog, "max");
+    shader->mvp        = glGetUniformLocation(shader->prog, "mvp");
+    shader->rot        = glGetUniformLocation(shader->prog, "rot");
+    shader->off        = glGetUniformLocation(shader->prog, "off");
+    shader->min        = glGetUniformLocation(shader->prog, "min");
+    shader->max        = glGetUniformLocation(shader->prog, "max");
+    shader->render_id  = glGetUniformLocation(shader->prog, "render_id");
     shader->point_size = glGetUniformLocation(shader->prog, "point_size");
-    shader->alpha_1= glGetUniformLocation(shader->prog, "alpha_1");
-    shader->alpha_2= glGetUniformLocation(shader->prog, "alpha_2");
+    shader->alpha_1    = glGetUniformLocation(shader->prog, "alpha_1");
+    shader->alpha_2    = glGetUniformLocation(shader->prog, "alpha_2");
 
     // cleanup
     free(frag_text);

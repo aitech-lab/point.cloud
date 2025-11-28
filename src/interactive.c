@@ -1,6 +1,11 @@
 #include <GLFW/glfw3.h>
+
 #include "interactive.h"
+#include "globals.h"
 #include "gui.h"
+
+int mouse_x;
+int mouse_y;
 
 static void key_callback            (GLFWwindow* win, int key, int scancode, int action, int mods);
 static void cursor_position_callback(GLFWwindow* win, double xpos, double ypos);
@@ -23,17 +28,26 @@ static void key_callback(
     // printf("key %d\n", key);
 }
 
+static bool g_MousePressed = false;
+static double g_LastMouseX = 0.0;
+static double g_LastMouseY = 0.0;
 static void cursor_position_callback(
     GLFWwindow* win, 
     double xpos, 
     double ypos) {
-    
+
+    mouse_x = xpos;
+    mouse_y = ypos;
+
+    // ImGuiIO *ioptr = igGetIO();
+    if (io->WantCaptureMouse) return;
+
     static double old_xpos;
     static double old_ypos; 
     mouse_x = xpos;
     mouse_y = ypos;
     if(!gui_focused){ 
-        if(glfwGetMouseButton(win,0) == GLFW_PRESS) {
+        if(glfwGetMouseButton(win,1) == GLFW_PRESS) {
             gui_camera_rx -= (old_ypos-ypos)*0.1;
             gui_camera_ry -= (old_xpos-xpos)*0.1;
         } else if(glfwGetMouseButton(win,1) == GLFW_PRESS) {
@@ -52,13 +66,21 @@ static void mouse_button_callback(
     int button, 
     int action, 
     int mods) {
+
+    if (io->WantCaptureMouse) return;
+
+    // printf("%d %d %d\n", button, action, mods);
+    if(button == 0 && action == 1) {
+        render_id = 1;
+    }
 }
 
 static void mouse_scroll_callback(
     GLFWwindow* win,
     double xoffset,
     double yoffset) {
-    if(!gui_focused) {
-        gui_camera_radius -= yoffset;
-    }
+    
+    if (io->WantCaptureMouse) return;
+
+    gui_camera_radius -= yoffset;
 }

@@ -1,12 +1,17 @@
 #pragma once
 
+#include "labels.h"
+
 typedef struct cluster_stat_t cluster_stat_t;
+typedef struct kdtree kdtree;
+typedef struct kdres kdres;
 
 typedef struct {
     unsigned int cols;    // number of cols
     unsigned int rows;    // number of rows
     char** header;        // csv header
     float* data;          // data
+    float* dynamic;       // dynamic payload
     float* min;           // min of col
     float* max;           // max of col
     unsigned int* min_id; // min row
@@ -15,6 +20,14 @@ typedef struct {
     float* notzero;       // notzero count
     int clusters_cnt;     // number of cluster, max_id - min_id 
     cluster_stat_t* clusters; // clusters stat
+
+    char** messages;
+    int messages_count;
+
+    labels_t* labels;
+
+    kdtree* index;
+
 } data_t;
 typedef data_t* data_p;
 
@@ -33,3 +46,10 @@ typedef struct cluster_stat_t {
 
 void data_free(data_p csv);
 data_p data_load(char* filename);
+
+char** load_messages_from_gz(const char* filename, int* num_lines);
+void free_messages(char** messages);
+
+int data_add_label(const char* label, float x, float y, float z);
+
+extern data_p data;

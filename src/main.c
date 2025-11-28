@@ -45,14 +45,16 @@ int main(int argc, char** argv) {
         // else if (c == '?') printf("unknown opt: -%c\n", opt.opt? opt.opt : ':');
         // else if (c == ':') printf("missing arg: -%c\n", opt.opt? opt.opt : ':');
     }
-    char* datafile =  (opt.ind < argc) ? argv[opt.ind] : "data.csv";
+    char* datafile =  (opt.ind < argc) ? argv[opt.ind] : "data.tsv.gz";
 
     printf("datafile: %s\n"        , datafile);
     printf("cluster_col: %d\n"     , cluster_col);
     printf("categories_start: %d\n", categories_start);
 
     data = data_load(datafile);
+    
     bbgl_init();
     bbgl_loop();
+    
     data_free(data);
 }
