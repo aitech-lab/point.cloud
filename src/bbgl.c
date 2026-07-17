@@ -36,8 +36,7 @@ int screen_width = 0, screen_height = 0;
 scene_p scene;
 
 
-// Обработчик события движения курсора мыши
-// Текущее состояние клика и позиция
+// Mouse cursor position callback: legacy (not used, replaced by interactive.c)
 static bool g_MousePressed = false;
 static double g_LastMouseX = 0.0;
 static double g_LastMouseY = 0.0;
@@ -45,29 +44,27 @@ void curposcb(GLFWwindow *window, double xpos, double ypos) {
 
   ImGuiIO *ioptr = igGetIO();
 
-  // **ВАЖНО:** Если ImGui использует мышь, мы не обрабатываем событие для
-  // сцены.
+  // If ImGui captures the mouse, don't process for scene
   if (ioptr->WantCaptureMouse)
     return;
 
-  // Логика перетаскивания (Drag)
+  // Drag logic
   if (g_MousePressed) {
     double dx = xpos - g_LastMouseX;
     double dy = ypos - g_LastMouseY;
 
-    // ВАЖНО: OpenGL Y-координата часто инвертирована по сравнению с экранными
-    // координатами (сверху-вниз). Если вы перемещаете 3D-объект, вам, возможно,
-    // придётся инвертировать 'dy'.
+    // Note: OpenGL Y-coordinate is often inverted compared to screen coordinates
+    // (top-down). For 3D object movement, dy may need to be inverted.
 
     printf("Dragging: Delta (%.1f, %.1f) | New Pos (%.1f, %.1f)\n", dx, dy,
            xpos, ypos);
 
-    // Обновление последней позиции для следующего кадра
+    // Update last position for next frame
     g_LastMouseX = xpos;
     g_LastMouseY = ypos;
 
-    // Здесь можно добавить логику для перемещения камеры/объектов
-    // Например, изменение угла поворота в зависимости от dx и dy
+    // Camera/object movement logic would go here
+    // Example: rotation angle adjustment based on dx and dy
   }
 }
 

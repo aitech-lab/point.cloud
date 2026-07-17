@@ -10,7 +10,7 @@ labels_t* labels_load(char* filename) {
 
     FILE* fp = fopen(labels_filename, "r");
     if (!fp) {
-        // Файл не существует — это нормально, вернём пустую структуру.
+        // File doesn't exist - this is normal, return empty structure
         labels_t* labels = calloc(1, sizeof(labels_t));
         return labels;
     }
@@ -18,17 +18,16 @@ labels_t* labels_load(char* filename) {
     labels_t* labels = calloc(1, sizeof(labels_t));
     char line[512];
     while (labels->cnt < LABELS_MAX && fgets(line, sizeof(line), fp)) {
-        // Убираем символ новой строки
+        // Remove newline character
         char* nl = strchr(line, '\n');
         if (nl) *nl = '\0';
 
-        // Пропускаем пустые строки
+        // Skip empty lines
         if (line[0] == '\0') continue;
 
         label_t* l = &labels->list[labels->cnt];
-        // Формат: x y z "label_text"
-        // Будем считать, что текст идёт после первых трёх чисел и может содержать пробелы.
-        // Простой подход: читаем 3 float, остаток — текст (без кавычек).
+        // Format: x y z "label_text"
+        // Parse 3 floats, remainder is text
         char* rest = NULL;
         l->x = strtof(line, &rest);
         if (!rest || *rest != ' ') goto error;
@@ -37,9 +36,9 @@ labels_t* labels_load(char* filename) {
         l->z = strtof(rest, &rest);
         if (!rest) goto error;
 
-        // Пропустить пробелы
+        // Skip whitespace
         while (*rest == ' ') rest++;
-        // Копируем остаток как текст, убирая кавычки по краям, если есть
+        // Copy remaining text, removing quotes if present
         size_t len = strlen(rest);
         if (len > 0) {
             char* start = rest;
@@ -78,7 +77,7 @@ int labels_add(labels_t* labels, float x, float y, float z, const char* text) {
     l->label[LABEL_TEXT_MAX - 1] = '\0';
     labels->cnt++;
 
-    // Сохраняем немедленно
+    // Save immediately
     FILE* fp = fopen(labels_filename, "w");
     if (!fp) {
         perror("Cannot open label file for writing");

@@ -64,7 +64,7 @@ static int classify_in_progress = 0;
 #define PROMPT_SIZE (1<<16)
 static char classify_prompt[PROMPT_SIZE] = "Дай общую, короткую классификацию, в 1-10 слов, для всех сообщений сразу. Ничего больше не предлагай. Далее идет список сообщений, по одному в строку:\n"; 
 
-// Функции
+// Helper function declarations
 static void world2screen(vec4 r, mat4 vp, vec4 p);
 
 static char* format_float(const char* format, float f);
@@ -107,7 +107,7 @@ void gui_init(GLFWwindow* win) {
 }
 
 
-// Callback для ImGui
+// ImGui clipboard callbacks
 void set_clipboard_text(const char* text) {
     glfwSetClipboardString(glfw_window, text);
 }
@@ -150,23 +150,22 @@ gui_update(scene_t* scene) {
 
 static void
 update_data() {
-    
-    // Собираем список ближайших сообщений для выбранного
-    // Если искать ближайших нужно и сменился выбранный семпл 
+
+    // Collect nearest neighbor messages when point selection changes
     static int picked_id_old = 0;
     if(do_search_nearest && picked_id != picked_id_old) {
         search_nearest(picked_id);
         do_search_nearest = 0;
     }
 
-    // Собираем список сообщений для из того же кластера
+    // Collect messages from same cluster when point selection changes
     if(do_search_cluster && picked_id != picked_id_old) {
         search_same_category(picked_id);
         do_search_cluster = 0;
-    } 
+    }
     picked_id_old = picked_id;
 
-    // Собираем список сообщений для выбранного кластера
+    // Update messages for selected cluster when cluster changes
     if (old_picked_cluster != picked_cluster) {
         picked_cluster_count = 0;
         // for (int i = 0; i < data->rows; i++) {
@@ -191,8 +190,7 @@ void update_min_max() {
     gui_max = data->max[gui_col_id];
 }
 
-// Ищем сообщение включающие строку str
-// В dynamic выставляем им 1.0
+// Search for messages containing string; set dynamic=1.0 for matches
 int on_search(char* str) {
     found_cnt = 0;
     for(int i=0; i<data->rows; i++) {
@@ -204,8 +202,8 @@ int on_search(char* str) {
                 found_messages[found_cnt] = msg;
                 found_cnt++;
             }
-        } 
-        // Сброс старого поиска
+        }
+        // Reset old search results (disabled)
         // else {
         //     data->dynamic[i] = 0.0;
         // }
@@ -231,17 +229,15 @@ int reset_search_results() {
 bool label_input_widget() {
     bool added = false;
     ImVec2_c button_size = { .x = 30.0f, .y = 0.0f };
-    
+
     igCheckbox("Show labels", &render_labels);
     if (render_labels) igSliderInt("Labels size", &labels_size,16,28, NULL,0);
-    
-    // Группируем текстовое поле и кнопку на одной строке
-    // igSetNextItemWidth(-button_size.x - igGetStyle()->ItemSpacing.x);
+
+    // Input field for labels (Enter also submits)
     if (igInputText("Label", input_buf, sizeof(input_buf), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
-        // Enter нажат — тоже добавляем
         if (input_buf[0] != '\0') {
             add_label(input_buf);
-            input_buf[0] = '\0'; 
+            input_buf[0] = '\0';
         }
     }
 
@@ -251,23 +247,21 @@ bool label_input_widget() {
 bool search_input_widget() {
     int searched = 0;
     ImVec2_c button_size = { .x = 0.0f, .y = 0.0f };
-    
+
     float pick_min = 0.1;
     float pick_max = 3.0;
     igSliderScalar("Pick radius",ImGuiDataType_Float, &pick_range, &pick_min, &pick_max, NULL, 0.1f);
     if (igIsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        igBeginTooltip(); 
-        igText("Use Ctrl+LMouse to select nearest"); 
-        igEndTooltip(); 
+        igBeginTooltip();
+        igText("Use Ctrl+LMouse to select nearest");
+        igEndTooltip();
     }
-    // Группируем текстовое поле и кнопку на одной строке
-    // igSetNextItemWidth(-button_size.x - igGetStyle()->ItemSpacing.x);
+    // Input field for search (Enter also submits)
     if (igInputText("Search word", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
-        // Enter нажат — тоже добавляем
         if (search_buf[0] != '\0') {
             searched = on_search(search_buf);
             if (searched) {
-                search_buf[0] = '\0'; // очищаем после успешного добавления
+                search_buf[0] = '\0'; // Clear after successful search
             }
         }
     }
@@ -343,23 +337,22 @@ search_window() {
     char buf[256];
 
     // --- Настройки ---
-    float window_width = 400.0f;  // Фиксированная ширина окна
-    float padding = 10.0f;        // Отступ от краев (по желанию)
-    ImGuiViewport* viewport = igGetMainViewport(); // Получаем основной вьюпорт (окно GLFW)
+    float window_width = 400.0f;  // Fixed window width
+    float padding = 10.0f;        // Padding from edges
+    ImGuiViewport* viewport = igGetMainViewport(); // Get main viewport (GLFW window)
 
-    float window_x = viewport->WorkPos.x + viewport->WorkSize.x - padding; // Координата правого края вьюпорта
-    float window_y = viewport->WorkPos.y + padding;                       // Отступ сверху (pivot.y = 0 -> верх)
+    float window_x = viewport->WorkPos.x + viewport->WorkSize.x - padding; // Right edge coordinate
+    float window_y = viewport->WorkPos.y + padding;                       // Top padding
 
     ImVec2_c pos = { .x = window_x-400 - padding, .y = window_y };
-    ImVec2_c pivot = { .x = 1.0f, .y = 0.0f }; // Привязка к правому верхнему углу окна
+    ImVec2_c pivot = { .x = 1.0f, .y = 0.0f }; // Anchor to top-right corner
 
     igSetNextWindowPos(pos, ImGuiCond_Always, pivot);
 
-    // Устанавливаем размер
-    ImVec2_c size = { .x = window_width, .y = viewport->WorkSize.y - 2 * padding }; // Например, высота = высота вьюпорта - отступы
-    igSetNextWindowSize(size, ImGuiCond_Always); // Используем Always, чтобы размер был фиксированным
+    // Set window size
+    ImVec2_c size = { .x = window_width, .y = viewport->WorkSize.y - 2 * padding }; // Height = viewport height - padding
+    igSetNextWindowSize(size, ImGuiCond_Always); // Use Always for fixed size
 
-    // ImGuiWindowFlags flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
     ImGuiWindowFlags flags = 0;
 
     if (igBegin("Search", NULL, flags)) {
@@ -381,8 +374,8 @@ copy_found_to_buffer(char* buffer, int buffer_size, int reset_first) {
     int i;
     for (i=0; i<found_cnt; i++) {
         int l = strlen(found_messages[i])+1;
-        // Проверяем, что вместится
-        if (s + l > buffer_size) break; 
+        // Check that it fits in buffer
+        if (s + l > buffer_size) break;
         strcat(buffer, found_messages[i]);
         strcat(buffer, "\n");
         s += l;
@@ -392,16 +385,15 @@ copy_found_to_buffer(char* buffer, int buffer_size, int reset_first) {
 }
 
 void on_classify_complete(const char* response, int status_code) {
-    // printf("===\n%s\n---\n%s\n", classify_request_buf, classify_response_buf);
     classify_in_progress = 0;
 }
 
 void classify_found() {
-    // сбрасываем request_buf
+    // Reset request buffer
     classify_request_buf[0] = 0;
-    // копируем в буффер промпт
+    // Copy classification prompt
     strcat(classify_request_buf, classify_prompt);
-    // копируем найденные сообщения, без сброса
+    // Copy found messages to buffer
     copy_found_to_buffer(classify_request_buf, CLASSIFY_BUFFER_SIZE - strlen(classify_request_buf), 0);
 
     curl_request_async(
@@ -479,16 +471,16 @@ clusters_window() {
     ImGuiWindowFlags flags = 0;
     sprintf(buf, "Picked:%d-%d", (int)picked_cluster, picked_id);
     if (igBegin(buf, NULL, flags)) {
-        // === 1. Выводим заголовок (picked message) ===
+        // Show picked message header
         igPushFont(NULL, 20);
         igTextWrapped("%d-%d\n%s", (int)picked_cluster, picked_id, data->messages[picked_id]);
         igPopFont();
 
-        // === 2. Вычисляем доступную высоту для двух списков ===
+        // Calculate available height for list content
         float available_height = igGetContentRegionAvail().y;
         float list_height = (available_height - igGetStyle()->ItemSpacing.y);
-        
-        // === 3. Первый список: "Соседи" (БЕЗ горизонтального скролла) ===
+
+        // Show selected/search results
         if(found_cnt>0) {
             igSeparatorText("Classification");
 
@@ -528,8 +520,8 @@ clusters_window() {
             }
         }
     
-        // Флаги БЕЗ горизонтального скролла
-        // ImGuiWindowFlags child_flags = 0; // ← просто 0
+        // Flags without horizontal scrollbar
+        // ImGuiWindowFlags child_flags = 0;
         // if (igBeginChild_Str("NeighborsList", (ImVec2_c){0, list_height}, false, child_flags)) {
         //     for (int i = 0; i < found_cnt; i++) {
         //         igTextWrapped("%s", found_messages[i]);
@@ -537,11 +529,10 @@ clusters_window() {
         // }
         // igEndChild();
 
-        // // === 4. Второй список: "Сообщения кластера" ===
-        // igSeparatorText("Сообщения кластера");
+        // Cluster messages section (disabled)
+        // igSeparatorText("Cluster messages");
         // if(igButton("Copy##copy_cluster", (ImVec2){0.0,0.0})){};
         // if (igBeginChild_Str("ClusterList", (ImVec2_c){0, list_height}, false, child_flags)) {
-     
         //     for (int i = 0; i < picked_cluster_count; i++) {
         //         igTextWrapped("%s", cluster_messages[i]);
         //     }

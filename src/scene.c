@@ -236,49 +236,49 @@ scene_render(scene_p scene) {
 }
 
 /*
-uint32_t 
+uint32_t
 scene_pick(scene_p s, int x, int y) {
     glBindFramebuffer(GL_FRAMEBUFFER, s->pick_fbo);
 
-    // Установить размер буфера под текущее окно (или использовать постоянный)
+    // Set viewport size for current window
     glViewport(0, 0, screen_width, screen_height);
 
-    // Очистить
+    // Clear buffers
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Отключить blending!
+    // Disable blending for picking
     glDisable(GL_BLEND);
     glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
 
-    // Использовать pick-шейдер
+    // Use picking shader
     shader_start(s->pick_shader);
 
     glUniformMatrix4fv(s->pick_mvp_loc, 1, GL_FALSE, (const GLfloat*)s->mvp);
 
-    // Рисуем облако точек
+    // Render point cloud
     for(size_t i = 0; i < s->objects.n; i++) {
-        obj_render(s->objects.a[i]); // предполагается, что obj_render использует VAO
+        obj_render(s->objects.a[i]);
     }
 
     shader_stop(s->pick_shader);
 
-    // Читаем пиксель
+    // Read pixel at click position
     unsigned char pixel[4] = {0};
     glReadPixels(x, screen_height - 1 - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
 
-    // Включить blending обратно
+    // Re-enable blending
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Возврат к основному буферу
+    // Return to main framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // Декодировать
+    // Decode vertex ID from pixel color
     uint32_t id = decode_color(pixel);
 
     if (pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 && pixel[3] == 0) {
-        return UINT32_MAX; // ничего не попало
+        return UINT32_MAX; // No hit
     }
 
     return id;

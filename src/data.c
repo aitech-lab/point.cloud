@@ -128,7 +128,7 @@ data_load(char* prefix) {
     sprintf(filename, "%s.labels.txt", prefix);
     data->labels = labels_load(filename);
 
-    // Генерируем индексы в динамическом массиве
+    // Initialize dynamic payload array with normalized row indices
     // for(int i=0; i<data->rows; i++) {
     //     data->dynamic[i] = (float)i/data->rows;
     // }
@@ -246,30 +246,26 @@ static void parse_header(data_t* data, char* header) {
         t = (n[0] == '"') ? strtok_r(NULL, "\"", &n) : strtok_r(NULL, "\t\n", &n);
     }
 
-    // Выделяем память под (data->cols + 1) указателей
+    // Allocate memory for (data->cols + 1) pointers
     size_t l = sizeof(char*) * (data->cols + 1);
     data->header = malloc(l);
     if (!data->header) {
         free(s);
-        return; // или обработайте ошибку
+        return;
     }
 
-    // Копируем оригинальные имена
+    // Copy original column names
     memcpy(data->header, names, sizeof(char*) * data->cols);
 
-    // Добавляем "dynamic" как дополнительный заголовок (без увеличения data->cols)
+    // Add "dynamic" as additional header (doesn't increase data->cols)
     data->header[data->cols] = strdup("dynamic");
 
     free(s);
 }
 
 
-/**
- * @brief Загружает и разбирает сжатый файл на массив строк.
- * @param filename Имя файла .gz
- * @param[out] num_lines Количество строк в файле
- * @return Массив строк (char**). Необходимо освободить с помощью free_messages.
- */
+// Load and parse gzipped file into array of strings
+// Returns array of message strings (char**), must be freed with free_messages
 char** load_messages_from_gz(const char* filename, int* num_lines) {
     gzFile file = gzopen(filename, "rb");
     if (!file) {
@@ -277,7 +273,7 @@ char** load_messages_from_gz(const char* filename, int* num_lines) {
         return NULL;
     }
 
-    // Читаем всё содержимое в буфер
+    // Read entire content into buffer
     const size_t chunk_size = 8192;
     char* buffer = NULL;
     size_t buffer_size = 0;
@@ -300,7 +296,7 @@ char** load_messages_from_gz(const char* filename, int* num_lines) {
         }
 
         if (bytes_read == 0) {
-            break; // Конец файла
+            break; // End of file
         }
 
         total_read += bytes_read;
@@ -309,37 +305,37 @@ char** load_messages_from_gz(const char* filename, int* num_lines) {
 
     gzclose(file);
 
-    // Убедимся, что буфер заканчивается на \0
+    // Ensure buffer is null-terminated
     buffer = realloc(buffer, total_read + 1);
     buffer[total_read] = '\0';
 
-    // Подсчитаем количество строк
+    // Count total lines
     int line_count = 0;
     for (size_t i = 0; i < total_read; i++) {
         if (buffer[i] == '\n') {
             line_count++;
         }
     }
-    // Если последний символ не \n, добавляем ещё одну строку
+    // If last character is not newline, count it as additional line
     if (total_read > 0 && buffer[total_read - 1] != '\n') {
         line_count++;
     }
 
-    // Выделяем массив указателей
-    char** lines = malloc((line_count + 1) * sizeof(char*)); // +1 для NULL-терминатора
+    // Allocate array of pointers (+1 for NULL terminator)
+    char** lines = malloc((line_count + 1) * sizeof(char*));
     if (!lines) {
         fprintf(stderr, "Error: Out of memory for line pointers\n");
         free(buffer);
         return NULL;
     }
 
-    // Заполняем массив указателями
+    // Fill array with pointers to line starts
     int current_line = 0;
-    lines[current_line] = buffer; // Первая строка начинается с начала буфера
+    lines[current_line] = buffer; // First line starts at buffer beginning
 
     for (size_t i = 0; i < total_read; i++) {
         if (buffer[i] == '\n') {
-            buffer[i] = '\0'; // Заменяем \n на \0
+            buffer[i] = '\0'; // Replace newline with null terminator
             current_line++;
             if (current_line < line_count) {
                 lines[current_line] = buffer + i + 1; // Следующая строка начинается после \0
