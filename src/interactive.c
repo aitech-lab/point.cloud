@@ -121,9 +121,12 @@ static void cursor_position_callback(
             glm_vec3_sub(target, world_cam_pos, view_dir);
             glm_vec3_normalize(view_dir);
 
-            vec3 world_up = {0.0, 1.0, 0.0};
+            vec3 local_up = {0.0, 1.0, 0.0};
+            vec3 screen_up;
+            glm_quat_rotatev(gui_camera_quat, local_up, screen_up);
+
             vec3 right;
-            glm_vec3_cross(view_dir, world_up, right);
+            glm_vec3_cross(view_dir, screen_up, right);
             glm_vec3_normalize(right);
 
             vec3 up;
