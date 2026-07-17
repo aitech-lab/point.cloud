@@ -17,6 +17,8 @@ typedef struct scene_t {
     GLuint pick_fbo;
     GLuint pick_texture;
     GLuint pick_rbo;
+    int fbo_width;
+    int fbo_height;
 } scene_t;
 typedef scene_t* scene_p;
 

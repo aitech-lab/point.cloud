@@ -11,6 +11,22 @@
 
 shader_p shader;
 
+static void
+scene_resize_pick_fbo(scene_p scene, int width, int height) {
+    scene->fbo_width = width;
+    scene->fbo_height = height;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, scene->pick_fbo);
+
+    glBindTexture(GL_TEXTURE_2D, scene->pick_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+    glBindRenderbuffer(GL_RENDERBUFFER, scene->pick_rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 scene_p
 scene_ctor() {
     scene_p scene = calloc(1, sizeof(scene_t));
@@ -27,17 +43,16 @@ scene_ctor() {
 
     glGenTextures(1, &scene->pick_texture);
     glBindTexture(GL_TEXTURE_2D, scene->pick_texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, screen_width, screen_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene->pick_texture, 0);
 
     glGenRenderbuffers(1, &scene->pick_rbo);
-    glBindRenderbuffer(GL_RENDERBUFFER, scene->pick_rbo);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, screen_width, screen_height);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, scene->pick_rbo);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    scene_resize_pick_fbo(scene, screen_width, screen_height);
 	return scene;
 }
 
@@ -108,6 +123,10 @@ scene_do_picking(scene_p scene) {
 void
 scene_render(scene_p scene) {
 
+    if (scene->fbo_width != screen_width || scene->fbo_height != screen_height) {
+        scene_resize_pick_fbo(scene, screen_width, screen_height);
+    }
+
     gui_camera_tx += (gui_camera_target_tx - gui_camera_tx)/10.0;
     gui_camera_ty += (gui_camera_target_ty - gui_camera_ty)/10.0;
     gui_camera_tz += (gui_camera_target_tz - gui_camera_tz)/10.0;
@@ -126,30 +145,59 @@ scene_render(scene_p scene) {
     glm_mat4_mul(scene->p, scene->v, scene->mvp);
     glm_mat4_identity(scene->rot);
 
-    if (render_id) {
-        scene_do_picking(scene);
-        render_id = 0;
+    if (debug_show_picking) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, screen_width, screen_height);
+        glClearColor(0.0, 0.0, 0.0, 0.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glEnable(GL_BLEND);
+        glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        shader_start(shader);
+        for(size_t i=0; i<scene->objects.n; i++) {
+            obj_p o = scene->objects.a[i];
+
+            glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
+            glUniform1f(shader->off,        (const GLfloat) gui_off_u);
+            glUniform1i(shader->render_id,  1);
+            glUniform1f(shader->min,        (const GLfloat) gui_min);
+            glUniform1f(shader->max,        (const GLfloat) gui_max);
+            glUniform1f(shader->alpha_1,    (const GLfloat) gui_alpha_1);
+            glUniform1f(shader->alpha_2,    (const GLfloat) gui_alpha_2);
+            glUniform1f(shader->point_size, 10.0);
+
+            obj_render(o);
+        }
+        shader_stop(shader);
+        glDisable(GL_BLEND);
+    } else {
+        if (render_id) {
+            scene_do_picking(scene);
+            render_id = 0;
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, screen_width, screen_height);
+
+        shader_start(shader);
+        for(size_t i=0; i<scene->objects.n; i++) {
+            obj_p o = scene->objects.a[i];
+
+            glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
+            glUniform1f(shader->off,        (const GLfloat) gui_off_u);
+            glUniform1i(shader->render_id,  0);
+            glUniform1f(shader->min,        (const GLfloat) gui_min);
+            glUniform1f(shader->max,        (const GLfloat) gui_max);
+            glUniform1f(shader->alpha_1,    (const GLfloat) gui_alpha_1);
+            glUniform1f(shader->alpha_2,    (const GLfloat) gui_alpha_2);
+            glUniform1f(shader->point_size, (const GLfloat) gui_point_size);
+
+            obj_render(o);
+        }
+        shader_stop(shader);
     }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, screen_width, screen_height);
-
-    shader_start(shader);
-    for(size_t i=0; i<scene->objects.n; i++) {
-        obj_p o = scene->objects.a[i];
-
-        glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
-        glUniform1f(shader->off,        (const GLfloat) gui_off_u);
-        glUniform1i(shader->render_id,  0);
-        glUniform1f(shader->min,        (const GLfloat) gui_min);
-        glUniform1f(shader->max,        (const GLfloat) gui_max);
-        glUniform1f(shader->alpha_1,    (const GLfloat) gui_alpha_1);
-        glUniform1f(shader->alpha_2,    (const GLfloat) gui_alpha_2);
-        glUniform1f(shader->point_size, (const GLfloat) gui_point_size);
-
-        obj_render(o);
-    }
-    shader_stop(shader);
 }
 
 /*
