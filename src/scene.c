@@ -112,17 +112,17 @@ scene_do_picking(scene_p scene) {
     glReadPixels(mouse_x, screen_height - 1 - mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     if(rgba[3]!=0) {
         // Decode 24-bit vertex ID from RGBA (24 bits fit in RGB channels)
-        picked_id = (rgba[0] << 24) | (rgba[1] << 16) | (rgba[2] << 8) | rgba[3];
-        picked_id >>= 8;
-        if(picked_id<0) picked_id = 0;
-        printf("%x %x %x %x = %09d\n", rgba[0], rgba[1], rgba[2], rgba[3], picked_id);
+        app_ctx.picked_id = (rgba[0] << 24) | (rgba[1] << 16) | (rgba[2] << 8) | rgba[3];
+        app_ctx.picked_id >>= 8;
+        if(app_ctx.picked_id<0) app_ctx.picked_id = 0;
+        printf("%x %x %x %x = %09d\n", rgba[0], rgba[1], rgba[2], rgba[3], app_ctx.picked_id);
 
         // Move camera target to the picked point's XYZ coordinates
-        float* picked = &data->data[picked_id*data->cols];
+        float* picked = &data->data[app_ctx.picked_id*data->cols];
         app_ctx.camera_target_tx = picked[0];
         app_ctx.camera_target_ty = picked[1];
         app_ctx.camera_target_tz = picked[2];
-        picked_cluster = picked[3];
+        app_ctx.picked_cluster = picked[3];
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -208,9 +208,9 @@ scene_render(scene_p scene) {
         shader_stop(shader);
         glDisable(GL_BLEND);
     } else {
-        if (render_id) {
+        if (app_ctx.render_id) {
             scene_do_picking(scene);
-            render_id = 0;
+            app_ctx.render_id = 0;
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
