@@ -83,7 +83,7 @@ static void cursor_position_callback(
     double dx = xpos - old_xpos;
     double dy = ypos - old_ypos;
 
-    if(!gui_focused){
+    if(!app_ctx.focused){
         if(glfwGetMouseButton(win, 1) == GLFW_PRESS) {
             // Right-drag: quaternion-based orbit rotation around screen axes
             // Extract screen-aligned axes from camera quaternion to avoid gimbal lock
@@ -91,8 +91,8 @@ static void cursor_position_callback(
             vec3 local_right = {1.0f, 0.0f, 0.0f};
 
             vec3 screen_up, screen_right;
-            glm_quat_rotatev(gui_camera_quat, local_up, screen_up);
-            glm_quat_rotatev(gui_camera_quat, local_right, screen_right);
+            glm_quat_rotatev(app_ctx.camera_quat, local_up, screen_up);
+            glm_quat_rotatev(app_ctx.camera_quat, local_right, screen_right);
 
             float angle_horizontal = -dx * 0.005f;
             float angle_vertical = -dy * 0.005f;
@@ -114,16 +114,16 @@ static void cursor_position_callback(
 
             // Apply both rotations: horizontal first, then vertical
             versor q_result;
-            glm_quat_mul(q_h, gui_camera_quat, q_result);
-            glm_quat_mul(q_v, q_result, gui_camera_quat);
+            glm_quat_mul(q_h, app_ctx.camera_quat, q_result);
+            glm_quat_mul(q_v, q_result, app_ctx.camera_quat);
         } else if(glfwGetMouseButton(win, 2) == GLFW_PRESS) {
             // Middle-drag: pan camera in view-space plane (screen-relative)
-            vec3 cam_offset = {0.0f, 0.0f, gui_camera_radius};
+            vec3 cam_offset = {0.0f, 0.0f, app_ctx.camera_radius};
             vec3 cam_pos;
-            glm_quat_rotatev(gui_camera_quat, cam_offset, cam_pos);
+            glm_quat_rotatev(app_ctx.camera_quat, cam_offset, cam_pos);
 
-            vec3 world_cam_pos = {gui_camera_tx + cam_pos[0], gui_camera_ty + cam_pos[1], gui_camera_tz + cam_pos[2]};
-            vec3 target = {gui_camera_tx, gui_camera_ty, gui_camera_tz};
+            vec3 world_cam_pos = {app_ctx.camera_tx + cam_pos[0], app_ctx.camera_ty + cam_pos[1], app_ctx.camera_tz + cam_pos[2]};
+            vec3 target = {app_ctx.camera_tx, app_ctx.camera_ty, app_ctx.camera_tz};
             vec3 view_dir;
             glm_vec3_sub(target, world_cam_pos, view_dir);
             glm_vec3_normalize(view_dir);
@@ -131,7 +131,7 @@ static void cursor_position_callback(
             // Build view-space axes for panning (not world-aligned)
             vec3 local_up = {0.0, 1.0, 0.0};
             vec3 screen_up;
-            glm_quat_rotatev(gui_camera_quat, local_up, screen_up);
+            glm_quat_rotatev(app_ctx.camera_quat, local_up, screen_up);
 
             vec3 right;
             glm_vec3_cross(view_dir, screen_up, right);
@@ -143,9 +143,9 @@ static void cursor_position_callback(
 
             // Pan target in view-space: negative dx moves left, negative dy moves up
             float pan_speed = 0.1;
-            gui_camera_target_tx -= right[0] * dx * pan_speed - up[0] * dy * pan_speed;
-            gui_camera_target_ty -= right[1] * dx * pan_speed - up[1] * dy * pan_speed;
-            gui_camera_target_tz -= right[2] * dx * pan_speed - up[2] * dy * pan_speed;
+            app_ctx.camera_target_tx -= right[0] * dx * pan_speed - up[0] * dy * pan_speed;
+            app_ctx.camera_target_ty -= right[1] * dx * pan_speed - up[1] * dy * pan_speed;
+            app_ctx.camera_target_tz -= right[2] * dx * pan_speed - up[2] * dy * pan_speed;
         }
     }
     old_xpos = xpos;
@@ -163,13 +163,13 @@ static void mouse_button_callback(
 
     printf("%d %d %d\n", button, action, mods);
     if(button == 0 && action == 1) {
-        render_id = 1;
+        app_ctx.render_id = 1;
         // +ctrl
         if(mods & 1) {
-            do_search_nearest = 1;
+            app_ctx.do_search_nearest = 1;
         }
         if(mods & 2) {
-            do_search_cluster = 1;
+            app_ctx.do_search_cluster = 1;
         }
     }
 }
@@ -181,11 +181,11 @@ static void mouse_scroll_callback(
 
     if (io->WantCaptureMouse) return;
 
-    gui_camera_radius -= yoffset;
+    app_ctx.camera_radius -= yoffset;
 }
 
 void interactive_update(void) {
-    if (io->WantCaptureKeyboard || gui_focused) return;
+    if (io->WantCaptureKeyboard || app_ctx.focused) return;
 
     // Game-style WASD movement: all movement is relative to current camera orientation
     // Compute camera-space axes from the quaternion to move in local coordinates
@@ -194,42 +194,42 @@ void interactive_update(void) {
     vec3 local_forward = {0.0f, 0.0f, 1.0f};
 
     vec3 screen_up, screen_right, screen_forward;
-    glm_quat_rotatev(gui_camera_quat, local_up, screen_up);
-    glm_quat_rotatev(gui_camera_quat, local_right, screen_right);
-    glm_quat_rotatev(gui_camera_quat, local_forward, screen_forward);
+    glm_quat_rotatev(app_ctx.camera_quat, local_up, screen_up);
+    glm_quat_rotatev(app_ctx.camera_quat, local_right, screen_right);
+    glm_quat_rotatev(app_ctx.camera_quat, local_forward, screen_forward);
 
     float move_speed = 0.5f;
 
     // Each key moves the camera target in the corresponding screen-aligned direction
     if (keys_pressed[key_move_forward]) {
-        gui_camera_target_tx -= screen_forward[0] * move_speed;
-        gui_camera_target_ty -= screen_forward[1] * move_speed;
-        gui_camera_target_tz -= screen_forward[2] * move_speed;
+        app_ctx.camera_target_tx -= screen_forward[0] * move_speed;
+        app_ctx.camera_target_ty -= screen_forward[1] * move_speed;
+        app_ctx.camera_target_tz -= screen_forward[2] * move_speed;
     }
     if (keys_pressed[key_move_back]) {
-        gui_camera_target_tx += screen_forward[0] * move_speed;
-        gui_camera_target_ty += screen_forward[1] * move_speed;
-        gui_camera_target_tz += screen_forward[2] * move_speed;
+        app_ctx.camera_target_tx += screen_forward[0] * move_speed;
+        app_ctx.camera_target_ty += screen_forward[1] * move_speed;
+        app_ctx.camera_target_tz += screen_forward[2] * move_speed;
     }
     if (keys_pressed[key_move_left]) {
-        gui_camera_target_tx -= screen_right[0] * move_speed;
-        gui_camera_target_ty -= screen_right[1] * move_speed;
-        gui_camera_target_tz -= screen_right[2] * move_speed;
+        app_ctx.camera_target_tx -= screen_right[0] * move_speed;
+        app_ctx.camera_target_ty -= screen_right[1] * move_speed;
+        app_ctx.camera_target_tz -= screen_right[2] * move_speed;
     }
     if (keys_pressed[key_move_right]) {
-        gui_camera_target_tx += screen_right[0] * move_speed;
-        gui_camera_target_ty += screen_right[1] * move_speed;
-        gui_camera_target_tz += screen_right[2] * move_speed;
+        app_ctx.camera_target_tx += screen_right[0] * move_speed;
+        app_ctx.camera_target_ty += screen_right[1] * move_speed;
+        app_ctx.camera_target_tz += screen_right[2] * move_speed;
     }
     if (keys_pressed[key_move_up]) {
-        gui_camera_target_tx += screen_up[0] * move_speed;
-        gui_camera_target_ty += screen_up[1] * move_speed;
-        gui_camera_target_tz += screen_up[2] * move_speed;
+        app_ctx.camera_target_tx += screen_up[0] * move_speed;
+        app_ctx.camera_target_ty += screen_up[1] * move_speed;
+        app_ctx.camera_target_tz += screen_up[2] * move_speed;
     }
     if (keys_pressed[key_move_down]) {
-        gui_camera_target_tx -= screen_up[0] * move_speed;
-        gui_camera_target_ty -= screen_up[1] * move_speed;
-        gui_camera_target_tz -= screen_up[2] * move_speed;
+        app_ctx.camera_target_tx -= screen_up[0] * move_speed;
+        app_ctx.camera_target_ty -= screen_up[1] * move_speed;
+        app_ctx.camera_target_tz -= screen_up[2] * move_speed;
     }
 }
 

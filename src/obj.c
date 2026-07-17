@@ -99,15 +99,15 @@ void
 obj_render(obj_p obj) {
     // Rebind VAO only when user changes which column to color by
     static int col_id = -1;
-    if(gui_col_id!=col_id) {
-        col_id = gui_col_id;
+    if(app_ctx.col_id!=col_id) {
+        col_id = app_ctx.col_id;
         init_vao(obj, col_id);
     }
 
     // Update dynamic buffer if search results or selection changed this frame
-    if(dynamic_data_updated){
+    if(app_ctx.dynamic_data_updated){
         obj_update_dynamic(obj);
-        dynamic_data_updated = 0;
+        app_ctx.dynamic_data_updated = 0;
     }
 
     glBindVertexArray(obj->vao);

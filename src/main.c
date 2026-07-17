@@ -9,12 +9,12 @@
 data_p data;
 int usage() {
     printf("Uasge:\n");
-    printf("\t./point_cloud [--cluster_col=col_id] [--categories_start=col_id] [csv_file.csv]\n");
+    printf("\t./point_cloud [--app_ctx.cluster_col=col_id] [--app_ctx.categories_start=col_id] [csv_file.csv]\n");
     printf("\n");
 
     printf("Params:\n");
-    printf("\t--cluster_col - id of cluster column\n"); 
-    printf("\t--categories_start - first category col id\n");
+    printf("\t--app_ctx.cluster_col - id of cluster column\n"); 
+    printf("\t--app_ctx.categories_start - first category col id\n");
     printf("\n");
 
     printf("csv file format:\n");
@@ -34,22 +34,22 @@ int main(int argc, char** argv) {
         { NULL, 0, 0 }
     };
 
-    cluster_col = -1;
-    categories_start = 6;
+    app_ctx.cluster_col = -1;
+    app_ctx.categories_start = 6;
 
     // Parse command-line arguments
     ketopt_t opt = KETOPT_INIT;
     int c;
     while ((c = ketopt(&opt, argc, argv, 1, "h", longopts)) >= 0) {
         if (c == 301 || c == 'h') return usage();
-        else if (c == 302) cluster_col      = opt.arg ? atoi(opt.arg) :-1;
-        else if (c == 303) categories_start = opt.arg ? atoi(opt.arg) : 0;
+        else if (c == 302) app_ctx.cluster_col      = opt.arg ? atoi(opt.arg) :-1;
+        else if (c == 303) app_ctx.categories_start = opt.arg ? atoi(opt.arg) : 0;
     }
     char* datafile =  (opt.ind < argc) ? argv[opt.ind] : "data.tsv.gz";
 
     printf("datafile: %s\n"        , datafile);
-    printf("cluster_col: %d\n"     , cluster_col);
-    printf("categories_start: %d\n", categories_start);
+    printf("app_ctx.cluster_col: %d\n"     , app_ctx.cluster_col);
+    printf("app_ctx.categories_start: %d\n", app_ctx.categories_start);
 
     // Load gzipped TSV dataset into flat array with spatial index
     data = data_load(datafile);

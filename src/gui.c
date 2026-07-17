@@ -144,7 +144,7 @@ gui_update(scene_t* scene) {
    
     // // igShowDemoWindow(NULL);
     
-    // gui_focused = igIsWindowFocused(ImGuiFocusedFlags_AnyWindow);
+    // app_ctx.focused = igIsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 }
 
 
@@ -153,41 +153,41 @@ update_data() {
 
     // Collect nearest neighbor messages when point selection changes
     static int picked_id_old = 0;
-    if(do_search_nearest && picked_id != picked_id_old) {
-        search_nearest(picked_id);
-        do_search_nearest = 0;
+    if(app_ctx.do_search_nearest && app_ctx.picked_id != picked_id_old) {
+        search_nearest(app_ctx.picked_id);
+        app_ctx.do_search_nearest = 0;
     }
 
     // Collect messages from same cluster when point selection changes
-    if(do_search_cluster && picked_id != picked_id_old) {
-        search_same_category(picked_id);
-        do_search_cluster = 0;
+    if(app_ctx.do_search_cluster && app_ctx.picked_id != picked_id_old) {
+        search_same_category(app_ctx.picked_id);
+        app_ctx.do_search_cluster = 0;
     }
-    picked_id_old = picked_id;
+    picked_id_old = app_ctx.picked_id;
 
     // Update messages for selected cluster when cluster changes
-    if (old_picked_cluster != picked_cluster) {
+    if (old_picked_cluster != app_ctx.picked_cluster) {
         picked_cluster_count = 0;
         // for (int i = 0; i < data->rows; i++) {
         //     float* row = &data->data[i * data->cols];
-        //     if ((int)picked_cluster == (int)row[CID_COL]) {
+        //     if ((int)app_ctx.picked_cluster == (int)row[CID_COL]) {
         //         cluster_messages[picked_cluster_count] = data->messages[i];
         //         if (picked_cluster_count >= MESSAGES_MAX - 1) break;
         //         picked_cluster_count++;
         //     }
         // }
-        old_picked_cluster = picked_cluster;
+        old_picked_cluster = app_ctx.picked_cluster;
     }    
 }
 
 int add_label(char* label) {
-    float* r = &data->data[picked_id*data->cols];
+    float* r = &data->data[app_ctx.picked_id*data->cols];
     return data_add_label(label, r[0], r[1], r[2]);
 }
 
 void update_min_max() {
-    gui_min = data->min[gui_col_id] + (data->max[gui_col_id]-data->min[gui_col_id])*0.01;
-    gui_max = data->max[gui_col_id];
+    app_ctx.min = data->min[app_ctx.col_id] + (data->max[app_ctx.col_id]-data->min[app_ctx.col_id])*0.01;
+    app_ctx.max = data->max[app_ctx.col_id];
 }
 
 // Search for messages containing string; set dynamic=1.0 for matches
@@ -208,10 +208,10 @@ int on_search(char* str) {
         //     data->dynamic[i] = 0.0;
         // }
     }
-    gui_col_id = data->cols;
+    app_ctx.col_id = data->cols;
     data->max[data->cols] = 1.0;
     update_min_max();
-    dynamic_data_updated = 1;
+    app_ctx.dynamic_data_updated = 1;
     return 1;
 }
 
@@ -221,7 +221,7 @@ int reset_search_results() {
         data->dynamic[i] = 0.0;
     }
     update_min_max();
-    dynamic_data_updated = 1;
+    app_ctx.dynamic_data_updated = 1;
     return 1;
 }
 
@@ -250,7 +250,7 @@ bool search_input_widget() {
 
     float pick_min = 0.1;
     float pick_max = 3.0;
-    igSliderScalar("Pick radius",ImGuiDataType_Float, &pick_range, &pick_min, &pick_max, NULL, 0.1f);
+    igSliderScalar("Pick radius",ImGuiDataType_Float, &app_ctx.pick_range, &pick_min, &pick_max, NULL, 0.1f);
     if (igIsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
         igBeginTooltip();
         igText("Use Ctrl+LMouse to select nearest");
@@ -275,7 +275,7 @@ static void
 search_nearest(int pid) {
     found_cnt = 0; 
     float* row = &data->data[pid*data->cols];
-    kdres* results = kd_nearest_range3f(data->index, row[0], row[1], row[2], pick_range);
+    kdres* results = kd_nearest_range3f(data->index, row[0], row[1], row[2], app_ctx.pick_range);
     if(results) {
         int n = kd_res_size(results);
         printf("Found %d\n", n);
@@ -298,10 +298,10 @@ search_nearest(int pid) {
         }
         kd_res_free(results);
 
-        gui_col_id = data->cols;
+        app_ctx.col_id = data->cols;
         data->max[data->cols] = 1.0;
         update_min_max();
-        dynamic_data_updated = 1;
+        app_ctx.dynamic_data_updated = 1;
     }
 }
 
@@ -327,7 +327,7 @@ search_same_category(int pid) {
     }
     data->max[data->cols] = 1.0;
     update_min_max();
-    dynamic_data_updated = 1;
+    app_ctx.dynamic_data_updated = 1;
 }
 
 
@@ -403,10 +403,9 @@ void classify_found() {
         on_classify_complete);
 }
 
-void
 // Game-style keybinding UI: click button, press key to rebind (uses scancodes, not layout-dependent)
 void
-keyboard_settings_window() {
+keyboard_settings_window(void) {
     if (igBegin("Keyboard Settings", NULL, 0)) {
         igText("Click a button and press a key to rebind:");
         igSeparator();
@@ -469,11 +468,11 @@ clusters_window() {
     // === ОТКЛЮЧАЕМ скроллбары и скролл мышью в основном окне ===
     // ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
     ImGuiWindowFlags flags = 0;
-    sprintf(buf, "Picked:%d-%d", (int)picked_cluster, picked_id);
+    sprintf(buf, "Picked:%d-%d", (int)app_ctx.picked_cluster, app_ctx.picked_id);
     if (igBegin(buf, NULL, flags)) {
         // Show picked message header
         igPushFont(NULL, 20);
-        igTextWrapped("%d-%d\n%s", (int)picked_cluster, picked_id, data->messages[picked_id]);
+        igTextWrapped("%d-%d\n%s", (int)app_ctx.picked_cluster, app_ctx.picked_id, data->messages[app_ctx.picked_id]);
         igPopFont();
 
         // Calculate available height for list content
@@ -553,14 +552,14 @@ columns_window() {
     float point_size_max   = 9.0;
 
     igBegin("columns", NULL, 0);
-    char* col_name = data->header[gui_col_id]; 
+    char* col_name = data->header[app_ctx.col_id]; 
     sprintf(buf, "%s\nPid:\t%d\nCnt:\t%5.0f\nSum:\t%5.2f\nMin:\t%5.2f\nMax:\t%5.2f", 
             col_name,
-            picked_id,
-            data->notzero[gui_col_id], data->sum[gui_col_id],
-            data->min[gui_col_id], data->max[gui_col_id]);
+            app_ctx.picked_id,
+            data->notzero[app_ctx.col_id], data->sum[app_ctx.col_id],
+            data->min[app_ctx.col_id], data->max[app_ctx.col_id]);
     igText(buf);
-    // igText(data->messages[picked_id]);
+    // igText(data->messages[app_ctx.picked_id]);
     igSeparatorText("Add marker");
     label_input_widget();
 
@@ -569,7 +568,7 @@ columns_window() {
    
     igSeparatorText("Visualisation settings");
 
-    igCheckbox("Debug: Show ID render", (bool*)&debug_show_picking);
+    igCheckbox("Debug: Show ID render", (bool*)&app_ctx.debug_show_picking);
 
     // float gui_camera_rx = 30.0;
     // float gui_camera_ry = 30.0;
@@ -579,7 +578,7 @@ columns_window() {
     float s_max = 50.0;
     
     // CIMGUI_API bool igSliderInt(const char* label,int* v,int v_min,int v_max,const char* format,ImGuiSliderFlags flags);
-    // igSliderInt("render_id", &render_id,0,1, NULL,0);
+    // igSliderInt("app_ctx.render_id", &app_ctx.render_id,0,1, NULL,0);
 
     // igSliderScalar("scale",ImGuiDataType_Float, &gui_camera_radius, &s_min, &s_max, NULL, 1.f);
     // igSliderScalar("rx",ImGuiDataType_Float, &gui_camera_rx, &r_min, &r_max, NULL, 1.f);
@@ -590,21 +589,21 @@ columns_window() {
     
     static int cluster_id=0;
     if(igSliderInt("Cluster id", &cluster_id,data->min[CID_COL],data->max[CID_COL], NULL,0)) {
-        gui_min = cluster_id;
-        gui_max = cluster_id+1;
+        app_ctx.min = cluster_id;
+        app_ctx.max = cluster_id+1;
     }
 
-    igSliderScalar("min",ImGuiDataType_Float, &gui_min, &data->min[gui_col_id], &data->max[gui_col_id], NULL, 1.f);
-    if(gui_max<gui_min) gui_max = gui_min+1.0;
-    igSliderScalar("max",ImGuiDataType_Float, &gui_max, &data->min[gui_col_id], &data->max[gui_col_id], NULL, 1.f);
-    if(gui_min>gui_max) gui_min = gui_max-1.0;
-    igSliderScalar("point size",ImGuiDataType_Float, &gui_point_size, &point_size_min, &point_size_max, NULL, 1.f);
-    igSliderScalar("alpha 1",ImGuiDataType_Float, &gui_alpha_1, &alpha_slider_min, &alpha_slider_max, NULL, 1.f);
-    igSliderScalar("alpha 2",ImGuiDataType_Float, &gui_alpha_2, &alpha_slider_min, &alpha_slider_max, NULL, 1.f);
+    igSliderScalar("min",ImGuiDataType_Float, &app_ctx.min, &data->min[app_ctx.col_id], &data->max[app_ctx.col_id], NULL, 1.f);
+    if(app_ctx.max<app_ctx.min) app_ctx.max = app_ctx.min+1.0;
+    igSliderScalar("max",ImGuiDataType_Float, &app_ctx.max, &data->min[app_ctx.col_id], &data->max[app_ctx.col_id], NULL, 1.f);
+    if(app_ctx.min>app_ctx.max) app_ctx.min = app_ctx.max-1.0;
+    igSliderScalar("point size",ImGuiDataType_Float, &app_ctx.point_size, &point_size_min, &point_size_max, NULL, 1.f);
+    igSliderScalar("alpha 1",ImGuiDataType_Float, &app_ctx.alpha_1, &alpha_slider_min, &alpha_slider_max, NULL, 1.f);
+    igSliderScalar("alpha 2",ImGuiDataType_Float, &app_ctx.alpha_2, &alpha_slider_min, &alpha_slider_max, NULL, 1.f);
 
     int min = 0; int max = data->cols-1;
-    bool gui_col_changed = igSliderScalar("col #", ImGuiDataType_U32, &gui_col_id, &min, &max,  "%u", 1.f);
-    gui_col_changed = gui_col_changed || igListBox_Str_arr("col", &gui_col_id, (const char* const*)data->header, data->cols+1, 10);
+    bool gui_col_changed = igSliderScalar("col #", ImGuiDataType_U32, &app_ctx.col_id, &min, &max,  "%u", 1.f);
+    gui_col_changed = gui_col_changed || igListBox_Str_arr("col", &app_ctx.col_id, (const char* const*)data->header, data->cols+1, 10);
     if(gui_col_changed) update_min_max();
 
     igSeparatorText("Help");
@@ -652,10 +651,10 @@ draw_markers(scene_t* scene) {
     // ImDrawList* idl = igGetBackgroundDrawList(vp);
     ImDrawList* idl = igGetBackgroundDrawList(vp);
 
-    // unsigned int row = data->max_id[gui_col_id];
+    // unsigned int row = data->max_id[app_ctx.col_id];
     // float* max_row = &data->data[row*data->cols];
     // vec4 pos = {max_row[0], max_row[1], max_row[2], 1.0};
-    float* picked = &data->data[picked_id * data->cols];
+    float* picked = &data->data[app_ctx.picked_id * data->cols];
     vec4 pos = {picked[0], picked[1], picked[2], 1.0};
 
     vec4 prj; 
@@ -667,7 +666,7 @@ draw_markers(scene_t* scene) {
     float r = 20.0;
     ImDrawList_AddCircle(idl, c, r, 0x7fFFFFFF,16,1.0);
     
-    // sprintf(buf, "Максимум: %5.2f", data->messages[picked_id]);
+    // sprintf(buf, "Максимум: %5.2f", data->messages[app_ctx.picked_id]);
     // printf("%s\n", buf);
     // void ImDrawList_AddText_FontPtr(ImDrawList* self,ImFont* font,float font_size,const ImVec2_c pos,ImU32 col,const char* text_begin,const char* text_end,float wrap_width,const ImVec4* cpu_fine_clip_rect);
     // void ImDrawList_AddText_Vec2(
@@ -676,16 +675,16 @@ draw_markers(scene_t* scene) {
     // ImU32 col,
     // const char* text_begin,
     // const char* text_end);
-    sprintf(buf, "%d-%d", (int)picked_cluster, picked_id);
+    sprintf(buf, "%d-%d", (int)app_ctx.picked_cluster, app_ctx.picked_id);
     ImVec2 ts = igCalcTextSize(buf, NULL, 0, 500.0);
     ImDrawList_AddText_Vec2(
         idl, (ImVec2) {c.x-ts.x/2.0, c.y+r+5.0}, 
         0xAFFFFFFF, buf, NULL);
 
-    // ts = igCalcTextSize(data->header[gui_col_id], NULL, 0, 500.0);
+    // ts = igCalcTextSize(data->header[app_ctx.col_id], NULL, 0, 500.0);
     // ImDrawList_AddText(
     //     idl, (ImVec2) {c.x-ts.x/2.0, c.y-ts.y-r-5.0}, 
-    //     0xAFFFFFFF, data->header[gui_col_id], NULL);
+    //     0xAFFFFFFF, data->header[app_ctx.col_id], NULL);
 }
 
 

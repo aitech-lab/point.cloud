@@ -92,13 +92,13 @@ scene_do_picking(scene_p scene) {
 
     shader_start(shader);
     glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
-    glUniform1f(shader->off, gui_off_u);
+    glUniform1f(shader->off, app_ctx.off_u);
     glUniform1i(shader->render_id, 1);  // Tell shader to encode vertex ID instead of coloring
-    glUniform1f(shader->min, gui_min);
-    glUniform1f(shader->max, gui_max);
-    glUniform1f(shader->alpha_1, gui_alpha_1);
-    glUniform1f(shader->alpha_2, gui_alpha_2);
-    glUniform1f(shader->point_size, gui_point_size);
+    glUniform1f(shader->min, app_ctx.min);
+    glUniform1f(shader->max, app_ctx.max);
+    glUniform1f(shader->alpha_1, app_ctx.alpha_1);
+    glUniform1f(shader->alpha_2, app_ctx.alpha_2);
+    glUniform1f(shader->point_size, app_ctx.point_size);
 
     for(size_t i=0; i<scene->objects.n; i++) {
         obj_render(scene->objects.a[i]);
@@ -119,9 +119,9 @@ scene_do_picking(scene_p scene) {
 
         // Move camera target to the picked point's XYZ coordinates
         float* picked = &data->data[picked_id*data->cols];
-        gui_camera_target_tx = picked[0];
-        gui_camera_target_ty = picked[1];
-        gui_camera_target_tz = picked[2];
+        app_ctx.camera_target_tx = picked[0];
+        app_ctx.camera_target_ty = picked[1];
+        app_ctx.camera_target_tz = picked[2];
         picked_cluster = picked[3];
     }
 
@@ -135,17 +135,17 @@ scene_render(scene_p scene) {
         scene_resize_pick_fbo(scene, screen_width, screen_height);
     }
 
-    gui_camera_tx += (gui_camera_target_tx - gui_camera_tx)/10.0;
-    gui_camera_ty += (gui_camera_target_ty - gui_camera_ty)/10.0;
-    gui_camera_tz += (gui_camera_target_tz - gui_camera_tz)/10.0;
+    app_ctx.camera_tx += (app_ctx.camera_target_tx - app_ctx.camera_tx)/10.0;
+    app_ctx.camera_ty += (app_ctx.camera_target_ty - app_ctx.camera_ty)/10.0;
+    app_ctx.camera_tz += (app_ctx.camera_target_tz - app_ctx.camera_tz)/10.0;
 
     // Compute camera position: rotate offset backward along the view
-    vec3 cam_offset = {0.0f, 0.0f, gui_camera_radius};
+    vec3 cam_offset = {0.0f, 0.0f, app_ctx.camera_radius};
     vec3 cam_pos;
-    glm_quat_rotatev(gui_camera_quat, cam_offset, cam_pos);
+    glm_quat_rotatev(app_ctx.camera_quat, cam_offset, cam_pos);
 
-    vec3 camera_world_pos = {gui_camera_tx+cam_pos[0], gui_camera_ty+cam_pos[1], gui_camera_tz+cam_pos[2]};
-    vec3 target_pos = {gui_camera_tx, gui_camera_ty, gui_camera_tz};
+    vec3 camera_world_pos = {app_ctx.camera_tx+cam_pos[0], app_ctx.camera_ty+cam_pos[1], app_ctx.camera_tz+cam_pos[2]};
+    vec3 target_pos = {app_ctx.camera_tx, app_ctx.camera_ty, app_ctx.camera_tz};
     vec3 view_dir;
     glm_vec3_sub(target_pos, camera_world_pos, view_dir);
     glm_vec3_normalize(view_dir);
@@ -154,7 +154,7 @@ scene_render(scene_p scene) {
     // When camera looks straight up/down, the usual up may be parallel to view_dir
     vec3 local_up = {0.0f, 1.0f, 0.0f};
     vec3 rotated_up;
-    glm_quat_rotatev(gui_camera_quat, local_up, rotated_up);
+    glm_quat_rotatev(app_ctx.camera_quat, local_up, rotated_up);
 
     vec3 right;
     glm_vec3_cross(view_dir, rotated_up, right);
@@ -180,7 +180,7 @@ scene_render(scene_p scene) {
     glm_mat4_mul(scene->p, scene->v, scene->mvp);
     glm_mat4_identity(scene->rot);
 
-    if (debug_show_picking) {
+    if (app_ctx.debug_show_picking) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, screen_width, screen_height);
         glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -195,12 +195,12 @@ scene_render(scene_p scene) {
             obj_p o = scene->objects.a[i];
 
             glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
-            glUniform1f(shader->off,        (const GLfloat) gui_off_u);
+            glUniform1f(shader->off,        (const GLfloat) app_ctx.off_u);
             glUniform1i(shader->render_id,  1);
-            glUniform1f(shader->min,        (const GLfloat) gui_min);
-            glUniform1f(shader->max,        (const GLfloat) gui_max);
-            glUniform1f(shader->alpha_1,    (const GLfloat) gui_alpha_1);
-            glUniform1f(shader->alpha_2,    (const GLfloat) gui_alpha_2);
+            glUniform1f(shader->min,        (const GLfloat) app_ctx.min);
+            glUniform1f(shader->max,        (const GLfloat) app_ctx.max);
+            glUniform1f(shader->alpha_1,    (const GLfloat) app_ctx.alpha_1);
+            glUniform1f(shader->alpha_2,    (const GLfloat) app_ctx.alpha_2);
             glUniform1f(shader->point_size, 10.0);
 
             obj_render(o);
@@ -221,13 +221,13 @@ scene_render(scene_p scene) {
             obj_p o = scene->objects.a[i];
 
             glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
-            glUniform1f(shader->off,        (const GLfloat) gui_off_u);
+            glUniform1f(shader->off,        (const GLfloat) app_ctx.off_u);
             glUniform1i(shader->render_id,  0);
-            glUniform1f(shader->min,        (const GLfloat) gui_min);
-            glUniform1f(shader->max,        (const GLfloat) gui_max);
-            glUniform1f(shader->alpha_1,    (const GLfloat) gui_alpha_1);
-            glUniform1f(shader->alpha_2,    (const GLfloat) gui_alpha_2);
-            glUniform1f(shader->point_size, (const GLfloat) gui_point_size);
+            glUniform1f(shader->min,        (const GLfloat) app_ctx.min);
+            glUniform1f(shader->max,        (const GLfloat) app_ctx.max);
+            glUniform1f(shader->alpha_1,    (const GLfloat) app_ctx.alpha_1);
+            glUniform1f(shader->alpha_2,    (const GLfloat) app_ctx.alpha_2);
+            glUniform1f(shader->point_size, (const GLfloat) app_ctx.point_size);
 
             obj_render(o);
         }

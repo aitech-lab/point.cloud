@@ -159,23 +159,23 @@ static int cat_stat_comp(const void* a, const void* b) {
 
 static void parse_clusters(data_t* data) {
     // search default cluster column if need
-    if (cluster_col<0) {
+    if (app_ctx.cluster_col<0) {
         for(int col=0; col < data->cols; col++) {
             if(strcmp(data->header[col], "clust"  ) == 0 || 
                strcmp(data->header[col], "кластер") == 0 ) {
-                cluster_col = col;
+                app_ctx.cluster_col = col;
                 break;
             }
         }
     }
 
     // cluster col not set
-    if(cluster_col < 0) return;
-    printf("cluster_col found: %d\n", cluster_col);
+    if(app_ctx.cluster_col < 0) return;
+    printf("app_ctx.cluster_col found: %d\n", app_ctx.cluster_col);
     
     // min / max values of cluster id
-    int min = (int)data->min[cluster_col];
-    int max = (int)data->max[cluster_col];
+    int min = (int)data->min[app_ctx.cluster_col];
+    int max = (int)data->max[app_ctx.cluster_col];
     printf("Cluster ids %d - %d\n", min, max);
     
     // init clusters stat sturcts 
@@ -191,7 +191,7 @@ static void parse_clusters(data_t* data) {
 
     // aggregate clusters stats
     for(int row = 0; row < data->rows; row++) {
-        int cluster = (int) (data->data[row*data->cols + cluster_col]);
+        int cluster = (int) (data->data[row*data->cols + app_ctx.cluster_col]);
         int cid = cluster - min; // min = -1 by deafult
         // count members of cluster
         data->clusters[cid].cnt++;
@@ -203,7 +203,7 @@ static void parse_clusters(data_t* data) {
                 // integrate per category sum
                 data->clusters[cid].cat_sum[col].sum += f;
                 // integrate only categories cols
-                if (col >= categories_start)
+                if (col >= app_ctx.categories_start)
                     data->clusters[cid].sum += f;
             }
         }
