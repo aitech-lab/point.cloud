@@ -18,11 +18,11 @@ typedef struct {
 } labels_t;
 
 // Загружает метки из файла filename. Возвращает указатель на labels_t или NULL при ошибке.
-labels_t* labels_load(const char* filename);
+labels_t* labels_load(char* filename);
 
 // Добавляет метку в структуру и сразу сохраняет в файл.
 // Возвращает 0 при успехе, -1 при ошибке (например, переполнение).
-int labels_add(labels_t* labels, const char* filename, float x, float y, float z, const char* text);
+int labels_add(labels_t* labels, float x, float y, float z, const char* text);
 
 // Освобождает память (в данном случае ничего не нужно — структура не содержит динамической памяти).
 void labels_free(labels_t* labels);

@@ -1,8 +1,14 @@
 // src/labels.c
 #include "labels.h"
+#include <string.h>
 
-labels_t* labels_load(const char* filename) {
-    FILE* fp = fopen(filename, "r");
+static char labels_filename[1024];
+
+labels_t* labels_load(char* filename) {
+    
+    strcpy(labels_filename, filename);
+
+    FILE* fp = fopen(labels_filename, "r");
     if (!fp) {
         // Файл не существует — это нормально, вернём пустую структуру.
         labels_t* labels = calloc(1, sizeof(labels_t));
@@ -60,8 +66,8 @@ error:
     return NULL;
 }
 
-int labels_add(labels_t* labels, const char* filename, float x, float y, float z, const char* text) {
-    if (!labels || !filename || !text) return -1;
+int labels_add(labels_t* labels, float x, float y, float z, const char* text) {
+    if (!labels || !labels_filename || !text) return -1;
     if (labels->cnt >= LABELS_MAX) return -1;
 
     label_t* l = &labels->list[labels->cnt];
@@ -73,7 +79,7 @@ int labels_add(labels_t* labels, const char* filename, float x, float y, float z
     labels->cnt++;
 
     // Сохраняем немедленно
-    FILE* fp = fopen(filename, "w");
+    FILE* fp = fopen(labels_filename, "w");
     if (!fp) {
         perror("Cannot open label file for writing");
         return -1;

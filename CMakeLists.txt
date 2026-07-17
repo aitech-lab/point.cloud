@@ -198,6 +198,7 @@ set(SOURCES
 	src/shader.c
 	src/scene.c
 	src/labels.c
+	src/curl.c
 	lib/gl3w/GL/gl3w.c
 	lib/kdtree/kdtree.c
 )
@@ -211,3 +212,15 @@ target_compile_definitions(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
 	cimgui GL dl m z pthread)
 
+
+# set(TEST_NAME test_scene)
+# set(TEST_SCENE_SOURCES 
+# 	src/test_scene.c
+# )
+# add_executable(${TEST_NAME} src/test_scene.c)
+# target_compile_definitions(${TEST_NAME}
+# 	PUBLIC 
+# 	-DCIMGUI_USE_OPENGL3 
+# 	-DCIMGUI_USE_GLFW)
+# target_link_libraries(${TEST_NAME}
+# 	cimgui GL GLEW dl m z )

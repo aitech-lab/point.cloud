@@ -5,8 +5,7 @@ int categories_start;
 
 float gui_camera_radius = 40.0;
 
-float gui_camera_rx     = 30.0;
-float gui_camera_ry     = 30.0;
+versor gui_camera_quat = {0.0f, 0.0f, 0.0f, 1.0f};
 
 float gui_camera_tx     = 0.0f;
 float gui_camera_ty     = 0.0f;
@@ -36,3 +35,6 @@ float picked_cluster = -1.0;
 float pick_range = 0.1;
 
 int dynamic_data_updated = 0;
+int do_search_nearest = 0;
+int do_search_cluster = 0;
+int debug_show_picking = 0;

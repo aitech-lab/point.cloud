@@ -17,6 +17,8 @@
 #include "gui.h"
 #include "scene.h"
 
+extern void interactive_update(void);
+
 #define WINDOW_WIDTH 1200
 #define WINDOW_HEIGHT 800
 
@@ -98,11 +100,12 @@ void bbgl_init() {
 }
 
 void bbgl_loop() {
-    
+
     while (!glfwWindowShouldClose(win)) {
         /* Input */
         glfwPollEvents();
-        
+        interactive_update();
+
         gui_update(scene);
 
         /* Draw */

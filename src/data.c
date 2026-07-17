@@ -40,9 +40,12 @@ void data_free(data_t* data) {
     }
 }
 
-
 data_t* 
-data_load(char* filename) {
+data_load(char* prefix) {
+
+    char filename[1024];
+
+    sprintf(filename, "%s.floats.tsv.gz", prefix);
 
     printf("Loading %s\n", filename);
     
@@ -116,10 +119,12 @@ data_load(char* filename) {
 
     gzclose(fp); // Закрываем сжатый файл
 
-    data->messages = load_messages_from_gz("messages.txt.gz", &data->messages_count);
+    sprintf(filename, "%s.messages.gz", prefix);
+    data->messages = load_messages_from_gz(filename, &data->messages_count);
     printf("Loaded %d messages\n", data->messages_count);
 
-    data->labels = labels_load("labels.txt");
+    sprintf(filename, "%s.labels.txt", prefix);
+    data->labels = labels_load(filename);
 
     // Генерируем индексы в динамическом массиве
     // for(int i=0; i<data->rows; i++) {
@@ -133,7 +138,7 @@ data_load(char* filename) {
 
 
 int data_add_label(const char* label, float x, float y, float z) {
-    return labels_add(data->labels, "labels.txt", x, y, z, label);
+    return labels_add(data->labels, x, y, z, label);
 }
 
 static int clusters_comp(const void* a, const void* b) {

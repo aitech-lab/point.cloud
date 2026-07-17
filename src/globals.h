@@ -6,8 +6,7 @@ extern int cluster_col;
 extern int categories_start;
 
 extern float gui_camera_radius;
-extern float gui_camera_rx;
-extern float gui_camera_ry;
+extern versor gui_camera_quat;
 
 extern float gui_camera_tx;
 extern float gui_camera_ty;
@@ -34,3 +33,6 @@ extern float picked_cluster;
 extern int dynamic_data_updated;
 
 extern float pick_range;
+extern int do_search_nearest;
+extern int do_search_cluster;
+extern int debug_show_picking;
