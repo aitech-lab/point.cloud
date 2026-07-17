@@ -131,9 +131,9 @@ static void cursor_position_callback(
             glm_vec3_normalize(up);
 
             float pan_speed = 0.1;
-            gui_camera_target_tx += right[0] * dx * pan_speed - up[0] * dy * pan_speed;
-            gui_camera_target_ty += right[1] * dx * pan_speed - up[1] * dy * pan_speed;
-            gui_camera_target_tz += right[2] * dx * pan_speed - up[2] * dy * pan_speed;
+            gui_camera_target_tx -= right[0] * dx * pan_speed - up[0] * dy * pan_speed;
+            gui_camera_target_ty -= right[1] * dx * pan_speed - up[1] * dy * pan_speed;
+            gui_camera_target_tz -= right[2] * dx * pan_speed - up[2] * dy * pan_speed;
         }
     }
     old_xpos = xpos;
