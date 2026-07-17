@@ -14,6 +14,9 @@ typedef struct scene_t {
     mat4 p,v;
     float n,f; // near far
     float fov;
+    GLuint pick_fbo;
+    GLuint pick_texture;
+    GLuint pick_rbo;
 } scene_t;
 typedef scene_t* scene_p;
 
