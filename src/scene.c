@@ -131,16 +131,37 @@ scene_render(scene_p scene) {
     gui_camera_ty += (gui_camera_target_ty - gui_camera_ty)/10.0;
     gui_camera_tz += (gui_camera_target_tz - gui_camera_tz)/10.0;
 
-    float x = gui_camera_radius*sin(gui_camera_rx/57.3)*sin(gui_camera_ry/57.3);
-    float z = gui_camera_radius*sin(gui_camera_rx/57.3)*cos(gui_camera_ry/57.3);
-    float y = gui_camera_radius*cos(gui_camera_rx/57.3);
+    vec3 cam_offset = {0.0f, 0.0f, gui_camera_radius};
+    vec3 cam_pos;
+    glm_quat_rotatev(gui_camera_quat, cam_offset, cam_pos);
+
+    vec3 camera_world_pos = {gui_camera_tx+cam_pos[0], gui_camera_ty+cam_pos[1], gui_camera_tz+cam_pos[2]};
+    vec3 target_pos = {gui_camera_tx, gui_camera_ty, gui_camera_tz};
+    vec3 view_dir;
+    glm_vec3_sub(target_pos, camera_world_pos, view_dir);
+    glm_vec3_normalize(view_dir);
+
+    vec3 local_up = {0.0f, 1.0f, 0.0f};
+    vec3 rotated_up;
+    glm_quat_rotatev(gui_camera_quat, local_up, rotated_up);
+
+    vec3 right;
+    glm_vec3_cross(view_dir, rotated_up, right);
+    float right_len = glm_vec3_norm(right);
+
+    vec3 final_up;
+    if (right_len < 0.01f) {
+        vec3 world_right = {1.0f, 0.0f, 0.0f};
+        glm_vec3_cross(world_right, view_dir, final_up);
+        glm_vec3_normalize(final_up);
+    } else {
+        glm_vec3_normalize(right);
+        glm_vec3_cross(view_dir, right, final_up);
+        glm_vec3_normalize(final_up);
+    }
 
     glm_perspective(scene->fov, ratio, scene->n, scene->f, scene->p);
-    glm_lookat(
-    	(vec3){gui_camera_tx+x, gui_camera_ty+y, gui_camera_tz+z},
-    	(vec3){gui_camera_tx  , gui_camera_ty  , gui_camera_tz  },
-    	(vec3){0.0, 1.0, 0.0},
-        scene->v);
+    glm_lookat(camera_world_pos, target_pos, final_up, scene->v);
 
     glm_mat4_mul(scene->p, scene->v, scene->mvp);
     glm_mat4_identity(scene->rot);
