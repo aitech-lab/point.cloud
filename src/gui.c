@@ -18,15 +18,73 @@
 #include "data.h"
 #include "scene.h"
 #include "kdtree.h"
+#include "curl.h"
 
 ImGuiContext* ctx;
 ImGuiIO* io;
 ImDrawData idd;
 
-static bool render_labels = true;
+extern int key_move_forward;
+extern int key_move_left;
+extern int key_move_back;
+extern int key_move_right;
+extern int key_move_up;
+extern int key_move_down;
+extern int rebinding_key;
+extern int* get_rebinding_target(void);
+extern void interactive_start_rebind(int* key_ptr);
+extern void settings_load(void);
+extern void settings_save(void);
+
+# define CID_COL 3
+
+static bool render_labels = false;
 static int labels_size = 18;
 
+#define MESSAGES_MAX 1000
+static float old_picked_cluster = -2.0f;
+static int picked_cluster_count = 0;
+static char* cluster_messages[MESSAGES_MAX] = {0};
+
+#define MAX_SEARCH_RESULTS 1000
+static int found_ids[MAX_SEARCH_RESULTS];
+static char* found_messages[MAX_SEARCH_RESULTS];
+static int found_cnt = 0;
+
+
+static char input_buf[128 + 1] = {0}; // +1 для терминатора
+static char search_buf[512 + 1] = {0}; // +1 для терминатора
+#define COPY_BUFFER_SIZE (1<<20)
+static char copy_buffer[COPY_BUFFER_SIZE+1];
+
+#define CLASSIFY_BUFFER_SIZE (1<<20)
+static char classify_request_buf[CLASSIFY_BUFFER_SIZE+1];
+static char classify_response_buf[CLASSIFY_BUFFER_SIZE+1];
+static int classify_in_progress = 0;
+#define PROMPT_SIZE (1<<16)
+static char classify_prompt[PROMPT_SIZE] = "Дай общую, короткую классификацию, в 1-10 слов, для всех сообщений сразу. Ничего больше не предлагай. Далее идет список сообщений, по одному в строку:\n"; 
+
+// Функции
+static void world2screen(vec4 r, mat4 vp, vec4 p);
+
+static char* format_float(const char* format, float f);
+void clusters_window();
+void columns_window();
+void search_window();
+void keyboard_settings_window();
+void draw_axis(scene_t* scene);
+void draw_markers(scene_t* scene);
+void draw_labels(scene_t* scene);
+
+static void update_data();
+static void search_nearest(int pid);
+static void search_same_category(int pid);
+
+static GLFWwindow* glfw_window;
+
 void gui_init(GLFWwindow* win) {
+
+    glfw_window = win;
 
     // // IMGUI_CHECKVERSION();
     ctx = igCreateContext(NULL);
@@ -40,37 +98,22 @@ void gui_init(GLFWwindow* win) {
     const char* glsl_version = "#version 330 core";
     ImGui_ImplGlfw_InitForOpenGL(win, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
-      
+
+    settings_load();
+
     // Setup style
     // igStyleColorsDark(NULL);
-    
+
 }
 
-static void world2screen(vec4 r, mat4 vp, vec4 p);
-
-static char* format_float(const char* format, float f);
-void clusters_window();
-void columns_window();
-void search_window();
-void draw_axis(scene_t* scene);
-void draw_markers(scene_t* scene);
-void draw_labels(scene_t* scene);
-
-static void update_data();
-static void search_nearest(int pid);
-
-
-#include <GLFW/glfw3.h>
 
 // Callback для ImGui
-void set_clipboard_text(void* user_data, const char* text) {
-    GLFWwindow* window = (GLFWwindow*)user_data;
-    glfwSetClipboardString(window, text);
+void set_clipboard_text(const char* text) {
+    glfwSetClipboardString(glfw_window, text);
 }
 
 const char* get_clipboard_text(void* user_data) {
-    GLFWwindow* window = (GLFWwindow*)user_data;
-    return glfwGetClipboardString(window);
+    return glfwGetClipboardString(glfw_window);
 }
 
 // // При инициализации ImGui:
@@ -91,11 +134,12 @@ gui_update(scene_t* scene) {
     columns_window();
     clusters_window();
     // search_window();
+    keyboard_settings_window();
 
     draw_axis(scene);
     draw_markers(scene);    
     if(render_labels) draw_labels(scene);
-
+   
     igRender();
    
     // // igShowDemoWindow(NULL);
@@ -103,42 +147,41 @@ gui_update(scene_t* scene) {
     // gui_focused = igIsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 }
 
-#define MESSAGES_MAX 1000
-static float old_picked_cluster = -2.0f;
-static int picked_cluster_count = 0;
-static char* cluster_messages[MESSAGES_MAX] = {0};
 
-#define MAX_SEARCH_RESULTS 1000
-static int found_ids[MAX_SEARCH_RESULTS];
-static char* found_messages[MAX_SEARCH_RESULTS];
-static int found_cnt = 0;
-
-static void update_data() {
-
-    // Собираем список ближайших сообщений для выбранного 
+static void
+update_data() {
+    
+    // Собираем список ближайших сообщений для выбранного
+    // Если искать ближайших нужно и сменился выбранный семпл 
     static int picked_id_old = 0;
-    if(picked_id != picked_id_old) {
-        found_cnt = 0;
+    if(do_search_nearest && picked_id != picked_id_old) {
         search_nearest(picked_id);
-        picked_id_old = picked_id;
+        do_search_nearest = 0;
     }
+
+    // Собираем список сообщений для из того же кластера
+    if(do_search_cluster && picked_id != picked_id_old) {
+        search_same_category(picked_id);
+        do_search_cluster = 0;
+    } 
+    picked_id_old = picked_id;
 
     // Собираем список сообщений для выбранного кластера
     if (old_picked_cluster != picked_cluster) {
         picked_cluster_count = 0;
-        for (int i = 0; i < data->rows; i++) {
-            float* row = &data->data[i * data->cols];
-            if ((int)picked_cluster == (int)row[3]) {
-                cluster_messages[picked_cluster_count] = data->messages[i];
-                if (picked_cluster_count >= MESSAGES_MAX - 1) break;
-                picked_cluster_count++;
-            }
-        }
+        // for (int i = 0; i < data->rows; i++) {
+        //     float* row = &data->data[i * data->cols];
+        //     if ((int)picked_cluster == (int)row[CID_COL]) {
+        //         cluster_messages[picked_cluster_count] = data->messages[i];
+        //         if (picked_cluster_count >= MESSAGES_MAX - 1) break;
+        //         picked_cluster_count++;
+        //     }
+        // }
         old_picked_cluster = picked_cluster;
     }    
 }
 
-int on_label_add(char* label) {
+int add_label(char* label) {
     float* r = &data->data[picked_id*data->cols];
     return data_add_label(label, r[0], r[1], r[2]);
 }
@@ -148,8 +191,8 @@ void update_min_max() {
     gui_max = data->max[gui_col_id];
 }
 
-
-
+// Ищем сообщение включающие строку str
+// В dynamic выставляем им 1.0
 int on_search(char* str) {
     found_cnt = 0;
     for(int i=0; i<data->rows; i++) {
@@ -185,51 +228,41 @@ int reset_search_results() {
 }
 
 
-static char input_buf[128 + 1] = {0}; // +1 для терминатора
-static char search_buf[512 + 1] = {0}; // +1 для терминатора
-
 bool label_input_widget() {
     bool added = false;
     ImVec2_c button_size = { .x = 30.0f, .y = 0.0f };
     
+    igCheckbox("Show labels", &render_labels);
+    if (render_labels) igSliderInt("Labels size", &labels_size,16,28, NULL,0);
+    
     // Группируем текстовое поле и кнопку на одной строке
-    igPushID_Str("LabelInput");
-    igSetNextItemWidth(-button_size.x - igGetStyle()->ItemSpacing.x);
-    if (igInputText("##LabelInput", input_buf, sizeof(input_buf), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+    // igSetNextItemWidth(-button_size.x - igGetStyle()->ItemSpacing.x);
+    if (igInputText("Label", input_buf, sizeof(input_buf), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
         // Enter нажат — тоже добавляем
         if (input_buf[0] != '\0') {
-            added = on_label_add(input_buf);
-            if (added) {
-                input_buf[0] = '\0'; // очищаем после успешного добавления
-            }
+            add_label(input_buf);
+            input_buf[0] = '\0'; 
         }
     }
-
-    igSameLine(0.0f, -1.0f);
-    if (igButton("+", button_size)) {
-        if (input_buf[0] != '\0') {
-            added = on_label_add(input_buf);
-            if (added) {
-                input_buf[0] = '\0';
-            }
-        }
-    }
-    igPopID();
-    
-    igCheckbox("Показывать метки", &render_labels);
-    igSliderInt("Размер меток", &labels_size,16,28, NULL,0);
 
     return added;
 }
 
 bool search_input_widget() {
     int searched = 0;
-    ImVec2_c button_size = { .x = 50.0f, .y = 0.0f };
+    ImVec2_c button_size = { .x = 0.0f, .y = 0.0f };
     
+    float pick_min = 0.1;
+    float pick_max = 3.0;
+    igSliderScalar("Pick radius",ImGuiDataType_Float, &pick_range, &pick_min, &pick_max, NULL, 0.1f);
+    if (igIsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        igBeginTooltip(); 
+        igText("Use Ctrl+LMouse to select nearest"); 
+        igEndTooltip(); 
+    }
     // Группируем текстовое поле и кнопку на одной строке
-    igPushID_Str("SearchInput");
-    igSetNextItemWidth(-button_size.x - igGetStyle()->ItemSpacing.x);
-    if (igInputText("##SearchInput", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+    // igSetNextItemWidth(-button_size.x - igGetStyle()->ItemSpacing.x);
+    if (igInputText("Search word", search_buf, sizeof(search_buf), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
         // Enter нажат — тоже добавляем
         if (search_buf[0] != '\0') {
             searched = on_search(search_buf);
@@ -238,19 +271,9 @@ bool search_input_widget() {
             }
         }
     }
-
-    igSameLine(0.0f, -1.0f);
-    if (igButton("search", button_size)) {
-        if (search_buf[0] != '\0') {
-            searched = on_search(search_buf);
-            if (searched) {
-                search_buf[0] = '\0';
-            }
-        }
-    }
-    igPopID();
     if(igButton("Reset results", (ImVec2){0.0,0.0})) reset_search_results();
-
+    
+    
     return searched;
 }
 
@@ -288,6 +311,32 @@ search_nearest(int pid) {
     }
 }
 
+
+static void 
+search_same_category(int pid) {
+    found_cnt = 0; 
+    float* row = &data->data[pid*data->cols];
+    float cid = row[CID_COL];
+    if(cid < 0) return;
+    printf("search cid %d\n", cid);
+    for (int i = 0; i < data->rows; i++) {
+        row = &data->data[i*data->cols];
+        if(row[CID_COL] == cid) {
+            data->dynamic[i] = 1.0;
+            if(found_cnt<MAX_SEARCH_RESULTS) {
+                char* msg = data->messages[i];
+                found_ids[found_cnt] = i;
+                found_messages[found_cnt] = msg;
+                found_cnt++;
+            }
+        }
+    }
+    data->max[data->cols] = 1.0;
+    update_min_max();
+    dynamic_data_updated = 1;
+}
+
+
 void
 search_window() {
 
@@ -324,6 +373,86 @@ search_window() {
     igEnd();
 }
 
+
+void
+copy_found_to_buffer(char* buffer, int buffer_size, int reset_first) {
+    if(reset_first) buffer[0]=0;
+    int s = 0;
+    int i;
+    for (i=0; i<found_cnt; i++) {
+        int l = strlen(found_messages[i])+1;
+        // Проверяем, что вместится
+        if (s + l > buffer_size) break; 
+        strcat(buffer, found_messages[i]);
+        strcat(buffer, "\n");
+        s += l;
+    }
+    set_clipboard_text(buffer);
+    printf("Copied %d/%d messages %d+Kb\n", i, found_cnt, s>>10);
+}
+
+void on_classify_complete(const char* response, int status_code) {
+    // printf("===\n%s\n---\n%s\n", classify_request_buf, classify_response_buf);
+    classify_in_progress = 0;
+}
+
+void classify_found() {
+    // сбрасываем request_buf
+    classify_request_buf[0] = 0;
+    // копируем в буффер промпт
+    strcat(classify_request_buf, classify_prompt);
+    // копируем найденные сообщения, без сброса
+    copy_found_to_buffer(classify_request_buf, CLASSIFY_BUFFER_SIZE - strlen(classify_request_buf), 0);
+
+    curl_request_async(
+        "http://localhost:5000/ask",
+        classify_request_buf,
+        classify_response_buf,
+        on_classify_complete);
+}
+
+void
+keyboard_settings_window() {
+    if (igBegin("Keyboard Settings", NULL, 0)) {
+        igText("Click a button and press a key to rebind:");
+        igSeparator();
+
+        char buf[32];
+        int* rebinding = get_rebinding_target();
+
+        sprintf(buf, "Forward: %d%s", key_move_forward, rebinding == &key_move_forward ? " [WAITING]" : "");
+        if (igButton(buf, (ImVec2){150, 0})) {
+            interactive_start_rebind(&key_move_forward);
+        }
+
+        sprintf(buf, "Left: %d%s", key_move_left, rebinding == &key_move_left ? " [WAITING]" : "");
+        if (igButton(buf, (ImVec2){150, 0})) {
+            interactive_start_rebind(&key_move_left);
+        }
+
+        sprintf(buf, "Back: %d%s", key_move_back, rebinding == &key_move_back ? " [WAITING]" : "");
+        if (igButton(buf, (ImVec2){150, 0})) {
+            interactive_start_rebind(&key_move_back);
+        }
+
+        sprintf(buf, "Right: %d%s", key_move_right, rebinding == &key_move_right ? " [WAITING]" : "");
+        if (igButton(buf, (ImVec2){150, 0})) {
+            interactive_start_rebind(&key_move_right);
+        }
+
+        sprintf(buf, "Up: %d%s", key_move_up, rebinding == &key_move_up ? " [WAITING]" : "");
+        if (igButton(buf, (ImVec2){150, 0})) {
+            interactive_start_rebind(&key_move_up);
+        }
+
+        sprintf(buf, "Down: %d%s", key_move_down, rebinding == &key_move_down ? " [WAITING]" : "");
+        if (igButton(buf, (ImVec2){150, 0})) {
+            interactive_start_rebind(&key_move_down);
+        }
+    }
+    igEnd();
+}
+
 void
 clusters_window() {
     char buf[256];
@@ -343,8 +472,8 @@ clusters_window() {
     igSetNextWindowSize(size, ImGuiCond_Always);
 
     // === ОТКЛЮЧАЕМ скроллбары и скролл мышью в основном окне ===
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
-
+    // ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoScrollbar;
+    ImGuiWindowFlags flags = 0;
     sprintf(buf, "Picked:%d-%d", (int)picked_cluster, picked_id);
     if (igBegin(buf, NULL, flags)) {
         // === 1. Выводим заголовок (picked message) ===
@@ -354,30 +483,67 @@ clusters_window() {
 
         // === 2. Вычисляем доступную высоту для двух списков ===
         float available_height = igGetContentRegionAvail().y;
-        float list_height = (available_height - igGetStyle()->ItemSpacing.y) * 0.5f;
-
+        float list_height = (available_height - igGetStyle()->ItemSpacing.y);
+        
         // === 3. Первый список: "Соседи" (БЕЗ горизонтального скролла) ===
-        igSeparatorText("Соседи");
-        if(igButton("Copy", (ImVec2){0.0,0.0})){};
-        // ⬇️ Флаги БЕЗ горизонтального скролла
-        ImGuiWindowFlags child_flags = 0; // ← просто 0
-        if (igBeginChild_Str("NeighborsList", (ImVec2_c){0, list_height}, false, child_flags)) {
+        if(found_cnt>0) {
+            igSeparatorText("Classification");
+
+            if(!classify_in_progress) {
+
+                igInputTextMultiline(
+                    "##prompt", 
+                    classify_prompt, 
+                    PROMPT_SIZE, 
+                    (ImVec2){-1.0, igGetTextLineHeight()*4}, 
+                    ImGuiInputTextFlags_WordWrap, 
+                    0, NULL);
+                if(igButton("Classify##classify", (ImVec2){0.0, 0.0})){
+                    classify_found();
+                    classify_in_progress = 1;
+                };
+                // igInputTextMultiline(const char *label, char *buf, size_t buf_size, const ImVec2_c size, ImGuiInputTextFlags flags, ImGuiInputTextCallback callback, void *user_data)
+            } else {
+                igProgressBar(-1.0*igGetTime(), (ImVec2){0.0, 0.0}, "Classify");
+            }
+            
+            if(classify_response_buf[0]!=0) {
+                igSeparatorText("Classification result");
+                igTextWrapped(classify_response_buf);
+                if (igButton("Add label", (ImVec2){0.0,0.0})) {
+                   add_label(classify_response_buf);
+                }
+                igSeparator();
+            }
+            
+            igSeparatorText("Selected / Search result");
+            if(igButton("Copy##copy_search", (ImVec2){0.0,0.0})){
+                copy_found_to_buffer(copy_buffer, COPY_BUFFER_SIZE, 1);
+            };
             for (int i = 0; i < found_cnt; i++) {
                 igTextWrapped("%s", found_messages[i]);
             }
         }
-        igEndChild();
+    
+        // Флаги БЕЗ горизонтального скролла
+        // ImGuiWindowFlags child_flags = 0; // ← просто 0
+        // if (igBeginChild_Str("NeighborsList", (ImVec2_c){0, list_height}, false, child_flags)) {
+        //     for (int i = 0; i < found_cnt; i++) {
+        //         igTextWrapped("%s", found_messages[i]);
+        //     }
+        // }
+        // igEndChild();
 
-        // === 4. Второй список: "Сообщения кластера" ===
-        igSeparatorText("Сообщения кластера");
-        if(igButton("Copy", (ImVec2){0.0,0.0})){};
-        if (igBeginChild_Str("ClusterList", (ImVec2_c){0, list_height}, false, child_flags)) {
+        // // === 4. Второй список: "Сообщения кластера" ===
+        // igSeparatorText("Сообщения кластера");
+        // if(igButton("Copy##copy_cluster", (ImVec2){0.0,0.0})){};
+        // if (igBeginChild_Str("ClusterList", (ImVec2_c){0, list_height}, false, child_flags)) {
      
-            for (int i = 0; i < picked_cluster_count; i++) {
-                igTextWrapped("%s", cluster_messages[i]);
-            }
-        }
-        igEndChild();
+        //     for (int i = 0; i < picked_cluster_count; i++) {
+        //         igTextWrapped("%s", cluster_messages[i]);
+        //     }
+        // }
+        // igEndChild();
     }
     igEnd();
 }
@@ -404,15 +570,13 @@ columns_window() {
     igSeparatorText("Add marker");
     label_input_widget();
 
-    float pick_min = 0.1;
-    float pick_max = 3.0;
-    igSliderScalar("Pick radius",ImGuiDataType_Float, &pick_range, &pick_min, &pick_max, NULL, 0.1f);
-
     igSeparatorText("Search");
     search_input_widget();
+   
+    igSeparatorText("Visualisation settings");
 
-    igSeparatorText("Config");
-    
+    igCheckbox("Debug: Show ID render", (bool*)&debug_show_picking);
+
     // float gui_camera_rx = 30.0;
     // float gui_camera_ry = 30.0;
     float r_min = -180.0;
@@ -431,7 +595,7 @@ columns_window() {
     // igSliderScalar("v",ImGuiDataType_Float, &gui_rot_v, &r_min, &r_max, NULL, 1.f);
     
     static int cluster_id=0;
-    if(igSliderInt("Кластер", &cluster_id,data->min[3],data->max[3], NULL,0)) {
+    if(igSliderInt("Cluster id", &cluster_id,data->min[CID_COL],data->max[CID_COL], NULL,0)) {
         gui_min = cluster_id;
         gui_max = cluster_id+1;
     }
@@ -448,6 +612,15 @@ columns_window() {
     bool gui_col_changed = igSliderScalar("col #", ImGuiDataType_U32, &gui_col_id, &min, &max,  "%u", 1.f);
     gui_col_changed = gui_col_changed || igListBox_Str_arr("col", &gui_col_id, (const char* const*)data->header, data->cols+1, 10);
     if(gui_col_changed) update_min_max();
+
+    igSeparatorText("Help");
+    igTextWrapped(
+        "Controls:\n"
+        " - LMouse         - Select one sample\n"
+        " - LMouse + Ctrl  - Select nearest\n"
+        " - LMouse + Shift - Select cluster\n"
+        " - RMouse         - Rotate\n"
+    );
 
     igEnd();
 }

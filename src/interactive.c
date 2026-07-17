@@ -1,12 +1,30 @@
 #include <GLFW/glfw3.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "interactive.h"
 #include "globals.h"
 #include "gui.h"
 
+#define SETTINGS_FILE "point_cloud_settings.cfg"
+
 int mouse_x;
 int mouse_y;
+
+int key_move_forward = 26;  // W
+int key_move_left    = 38;  // A
+int key_move_back    = 39;  // S
+int key_move_right   = 40;  // D
+int key_move_up      = 65;  // Space
+int key_move_down    = 50;  // LCtrl
+
+int rebinding_key = 0;
+static int* rebinding_target = NULL;
+static int keys_pressed[256] = {0};
+
+int* get_rebinding_target(void) {
+    return rebinding_target;
+}
 
 static void key_callback            (GLFWwindow* win, int key, int scancode, int action, int mods);
 static void cursor_position_callback(GLFWwindow* win, double xpos, double ypos);
@@ -21,12 +39,27 @@ void interactive_init(GLFWwindow* win) {
 }
 
 static void key_callback(
-    GLFWwindow* win, 
-    int key, 
-    int scancode, 
-    int action, 
+    GLFWwindow* win,
+    int key,
+    int scancode,
+    int action,
     int mods) {
-    // printf("key %d\n", key);
+    if (action == GLFW_PRESS && rebinding_target != NULL) {
+        *rebinding_target = scancode;
+        rebinding_target = NULL;
+        rebinding_key = 0;
+        settings_save();
+        return;
+    }
+
+    if (scancode < 256) {
+        keys_pressed[scancode] = (action != GLFW_RELEASE);
+    }
+}
+
+void interactive_start_rebind(int* key_ptr) {
+    rebinding_target = key_ptr;
+    rebinding_key = 1;
 }
 
 static bool g_MousePressed = false;
@@ -133,8 +166,85 @@ static void mouse_scroll_callback(
     GLFWwindow* win,
     double xoffset,
     double yoffset) {
-    
+
     if (io->WantCaptureMouse) return;
 
     gui_camera_radius -= yoffset;
+}
+
+void interactive_update(void) {
+    if (io->WantCaptureKeyboard || gui_focused) return;
+
+    vec3 local_up = {0.0f, 1.0f, 0.0f};
+    vec3 local_right = {1.0f, 0.0f, 0.0f};
+    vec3 local_forward = {0.0f, 0.0f, 1.0f};
+
+    vec3 screen_up, screen_right, screen_forward;
+    glm_quat_rotatev(gui_camera_quat, local_up, screen_up);
+    glm_quat_rotatev(gui_camera_quat, local_right, screen_right);
+    glm_quat_rotatev(gui_camera_quat, local_forward, screen_forward);
+
+    float move_speed = 0.5f;
+
+    if (keys_pressed[key_move_forward]) {
+        gui_camera_target_tx -= screen_forward[0] * move_speed;
+        gui_camera_target_ty -= screen_forward[1] * move_speed;
+        gui_camera_target_tz -= screen_forward[2] * move_speed;
+    }
+    if (keys_pressed[key_move_back]) {
+        gui_camera_target_tx += screen_forward[0] * move_speed;
+        gui_camera_target_ty += screen_forward[1] * move_speed;
+        gui_camera_target_tz += screen_forward[2] * move_speed;
+    }
+    if (keys_pressed[key_move_left]) {
+        gui_camera_target_tx -= screen_right[0] * move_speed;
+        gui_camera_target_ty -= screen_right[1] * move_speed;
+        gui_camera_target_tz -= screen_right[2] * move_speed;
+    }
+    if (keys_pressed[key_move_right]) {
+        gui_camera_target_tx += screen_right[0] * move_speed;
+        gui_camera_target_ty += screen_right[1] * move_speed;
+        gui_camera_target_tz += screen_right[2] * move_speed;
+    }
+    if (keys_pressed[key_move_up]) {
+        gui_camera_target_tx += screen_up[0] * move_speed;
+        gui_camera_target_ty += screen_up[1] * move_speed;
+        gui_camera_target_tz += screen_up[2] * move_speed;
+    }
+    if (keys_pressed[key_move_down]) {
+        gui_camera_target_tx -= screen_up[0] * move_speed;
+        gui_camera_target_ty -= screen_up[1] * move_speed;
+        gui_camera_target_tz -= screen_up[2] * move_speed;
+    }
+}
+
+void settings_load(void) {
+    FILE* f = fopen(SETTINGS_FILE, "r");
+    if (!f) return;
+
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        int val;
+        if (sscanf(line, "key_move_forward=%d", &val) == 1) key_move_forward = val;
+        else if (sscanf(line, "key_move_left=%d", &val) == 1) key_move_left = val;
+        else if (sscanf(line, "key_move_back=%d", &val) == 1) key_move_back = val;
+        else if (sscanf(line, "key_move_right=%d", &val) == 1) key_move_right = val;
+        else if (sscanf(line, "key_move_up=%d", &val) == 1) key_move_up = val;
+        else if (sscanf(line, "key_move_down=%d", &val) == 1) key_move_down = val;
+    }
+    fclose(f);
+}
+
+void settings_save(void) {
+    FILE* f = fopen(SETTINGS_FILE, "w");
+    if (!f) return;
+
+    fprintf(f, "key_move_forward=%d\n", key_move_forward);
+    fprintf(f, "key_move_left=%d\n", key_move_left);
+    fprintf(f, "key_move_back=%d\n", key_move_back);
+    fprintf(f, "key_move_right=%d\n", key_move_right);
+    fprintf(f, "key_move_up=%d\n", key_move_up);
+    fprintf(f, "key_move_down=%d\n", key_move_down);
+
+    fclose(f);
 }
