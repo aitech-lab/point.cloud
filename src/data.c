@@ -40,7 +40,8 @@ void data_free(data_t* data) {
     }
 }
 
-data_t* 
+// Load gzipped TSV dataset: flatten into single float array and build spatial index
+data_t*
 data_load(char* prefix) {
 
     char filename[1024];
@@ -48,25 +49,23 @@ data_load(char* prefix) {
     sprintf(filename, "%s.floats.tsv.gz", prefix);
 
     printf("Loading %s\n", filename);
-    
-    // Открываем сжатый файл
+
+    // Open gzipped TSV file
     gzFile fp = gzopen(filename, "rb");
     if (!fp) return NULL;
-    
-    // allocate structure
+
+    // Count total rows (for preallocation)
     data_t* data = calloc(1, sizeof(data_t));
-    // count lines
     char line[LINE_SIZE];
     while(gzgets(fp, line, LINE_SIZE) != Z_NULL) {
-        if(strchr(line, '\n')) data->rows++; // Подсчитываем строки
+        if(strchr(line, '\n')) data->rows++;
     }
 
-    // Отнимаем заголовок tsv
-    data->rows--;
+    data->rows--;  // Subtract header
     printf("Counted: %d rows\n", data->rows);
-    gzrewind(fp); // Перематываем обратно
+    gzrewind(fp);
 
-    //parse header
+    // Parse TSV header to detect cluster column and data column count
     gzgets(fp, line, LINE_SIZE);
     parse_header(data, line);
     
@@ -79,17 +78,19 @@ data_load(char* prefix) {
     data->min_id  = calloc(data->cols+1, sizeof(unsigned int));
     data->max_id  = calloc(data->cols+1, sizeof(unsigned int));
 
+    // Create 3D spatial index for nearest-neighbor and frustum queries
     data->index = kd_create(3);
-    
+
+    // Parse each row: flatten into data array, track min/max/sum, and index XYZ coords
     size_t row_id = 0;
     while(gzgets(fp, line, LINE_SIZE) != Z_NULL) {
         char* tmp = line;
         int col;
         char* t;
         float* row = &data->data[row_id * data->cols];
-        for(col=0, t=strtok(tmp,"\t"); // Разделитель - табуляция
-            t && *t; 
-            col++, t = strtok(NULL, "\t\n")) { // Разделитель - табуляция и новая строка
+        for(col=0, t=strtok(tmp,"\t");
+            t && *t;
+            col++, t = strtok(NULL, "\t\n")) {
             float f = atof(t);
             row[col] = f;
             if (f != 0.0) {
@@ -104,13 +105,14 @@ data_load(char* prefix) {
                 data->max[col] = f;
                 data->max_id[col] = row_id;
             }
-            // Break if data greater than header
             if(col>=data->cols) break;
         }
+        // Index first 3 columns (XYZ) in spatial tree for picking and nearest-neighbor search
         kd_insert3f(data->index, row[0], row[1], row[2], (void*)row_id);
         row_id++;
     }
-    
+
+    // Aggregate per-cluster statistics (member counts, category sums)
     parse_clusters(data);
     
     printf("loaded: %ld rows\n", row_id);

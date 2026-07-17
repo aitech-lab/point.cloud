@@ -6,19 +6,21 @@
 static void check_shader(GLuint sid);
 static void load_file( char*  filename,  char** buf);
 
-shader_p 
+// Load and compile shader program, cache uniform locations
+// Shader has two rendering modes: normal (HSV coloring) and render_id (vertex ID encoding)
+shader_p
 shader_ctor(char* shader_name) {
-    
+
     shader_p shader = calloc(1, sizeof(shader_t));
-    
+
     char vert_name[256];
     char frag_name[256];
     char* vert_text;
     char* frag_text;
-    
+
     sprintf(vert_name, "shaders/%s.vert", shader_name);
     sprintf(frag_name, "shaders/%s.frag", shader_name);
-    
+
     load_file(vert_name, &vert_text);
     load_file(frag_name, &frag_text);
 
@@ -26,7 +28,7 @@ shader_ctor(char* shader_name) {
     glShaderSource(vert_id, 1, (const char**)&vert_text, NULL);
     glCompileShader(vert_id);
     check_shader(vert_id);
-    
+
     GLuint frag_id = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(frag_id, 1, (const char**)&frag_text, NULL);
     glCompileShader(frag_id);
@@ -39,7 +41,8 @@ shader_ctor(char* shader_name) {
 
     glDeleteShader(vert_id);
     glDeleteShader(frag_id);
-    
+
+    // Cache uniform locations so we don't query them every frame
     shader->mvp        = glGetUniformLocation(shader->prog, "mvp");
     shader->rot        = glGetUniformLocation(shader->prog, "rot");
     shader->off        = glGetUniformLocation(shader->prog, "off");
@@ -50,7 +53,6 @@ shader_ctor(char* shader_name) {
     shader->alpha_1    = glGetUniformLocation(shader->prog, "alpha_1");
     shader->alpha_2    = glGetUniformLocation(shader->prog, "alpha_2");
 
-    // cleanup
     free(frag_text);
     free(vert_text);
 

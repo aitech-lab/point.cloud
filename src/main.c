@@ -24,6 +24,7 @@ int usage() {
     return 0;
 }
 
+// Entry point: parse args, load data, initialize OpenGL, run main loop
 int main(int argc, char** argv) {
 
     static ko_longopt_t longopts[] = {
@@ -35,15 +36,14 @@ int main(int argc, char** argv) {
 
     cluster_col = -1;
     categories_start = 6;
-    
+
+    // Parse command-line arguments
     ketopt_t opt = KETOPT_INIT;
     int c;
     while ((c = ketopt(&opt, argc, argv, 1, "h", longopts)) >= 0) {
         if (c == 301 || c == 'h') return usage();
         else if (c == 302) cluster_col      = opt.arg ? atoi(opt.arg) :-1;
         else if (c == 303) categories_start = opt.arg ? atoi(opt.arg) : 0;
-        // else if (c == '?') printf("unknown opt: -%c\n", opt.opt? opt.opt : ':');
-        // else if (c == ':') printf("missing arg: -%c\n", opt.opt? opt.opt : ':');
     }
     char* datafile =  (opt.ind < argc) ? argv[opt.ind] : "data.tsv.gz";
 
@@ -51,10 +51,14 @@ int main(int argc, char** argv) {
     printf("cluster_col: %d\n"     , cluster_col);
     printf("categories_start: %d\n", categories_start);
 
+    // Load gzipped TSV dataset into flat array with spatial index
     data = data_load(datafile);
-    
+
+    // Initialize OpenGL context, shaders, and UI (ImGui)
     bbgl_init();
+    // Main render loop: input → gui update → scene render → swap buffers
     bbgl_loop();
-    
+
+    // Cleanup
     data_free(data);
 }

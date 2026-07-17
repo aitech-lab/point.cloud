@@ -1,0 +1,23 @@
+CompileFlags:
+  Add:
+    - "-Ilib/cimgui"
+    - "-Ilib/cimgui/imgui"
+    - "-Ilib/cglm/include"
+    - "-Ilib/klib"
+    - "-Ilib/gl3w/include"
+    - "-Isrc"
+    - "-I."
+    - "-std=c99"
+    - "-fPIC"
+  Remove:
+    - "-m*"
+    - "-fstack-protector*"
+
+InlayHints:
+  Enabled: true
+  ParameterHints: true
+  TypeHints: true
+  ChainingHints: true
+
+Hover:
+  ShowAKA: true

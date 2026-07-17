@@ -104,30 +104,32 @@ void bbgl_loop() {
     while (!glfwWindowShouldClose(win)) {
         /* Input */
         glfwPollEvents();
+        // Handle WASD keys and rebinding during input phase
         interactive_update();
 
+        // Update ImGui windows, UI state, and camera targets
         gui_update(scene);
 
-        /* Draw */
+        /* Render */
         glfwGetWindowSize(win, &screen_width, &screen_height);
         ratio = (float)screen_width/(float)screen_height;
         glViewport(0, 0, screen_width, screen_height);
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.0, 0.0, 0.0, 0.0);
-        
-        //SCENE
+
+        // Render point cloud with alpha blending
         glEnable(GL_BLEND);
         glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         scene_render(scene);
         glDisable(GL_BLEND);
-        
-        // GUI
+
+        // Render ImGui windows on top
         gui_render();
-        
+
         glfwSwapBuffers(win);
     }
- 
+
 }
 
 void bbgl_terminate() {

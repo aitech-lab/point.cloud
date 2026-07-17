@@ -11,6 +11,7 @@
 
 shader_p shader;
 
+// Resize off-screen FBO when window changes size
 static void
 scene_resize_pick_fbo(scene_p scene, int width, int height) {
     scene->fbo_width = width;
@@ -18,9 +19,11 @@ scene_resize_pick_fbo(scene_p scene, int width, int height) {
 
     glBindFramebuffer(GL_FRAMEBUFFER, scene->pick_fbo);
 
+    // Resize color texture for GPU picking (encodes vertex IDs as colors)
     glBindTexture(GL_TEXTURE_2D, scene->pick_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
+    // Resize depth buffer for picking render
     glBindRenderbuffer(GL_RENDERBUFFER, scene->pick_rbo);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
 
@@ -74,6 +77,8 @@ scene_add_obj(scene_p scene, obj_p obj) {
     kv_push(obj_p, scene->objects, obj);
 }
 
+// GPU picking: render point cloud to off-screen FBO with vertex IDs encoded as colors
+// Read pixel at mouse position to extract picked point ID and focus camera on it
 static void
 scene_do_picking(scene_p scene) {
     glBindFramebuffer(GL_FRAMEBUFFER, scene->pick_fbo);
@@ -88,7 +93,7 @@ scene_do_picking(scene_p scene) {
     shader_start(shader);
     glUniformMatrix4fv(shader->mvp, 1, GL_FALSE, (const GLfloat*) scene->mvp);
     glUniform1f(shader->off, gui_off_u);
-    glUniform1i(shader->render_id, 1);
+    glUniform1i(shader->render_id, 1);  // Tell shader to encode vertex ID instead of coloring
     glUniform1f(shader->min, gui_min);
     glUniform1f(shader->max, gui_max);
     glUniform1f(shader->alpha_1, gui_alpha_1);
@@ -102,14 +107,17 @@ scene_do_picking(scene_p scene) {
     shader_stop(shader);
     glDisable(GL_BLEND);
 
+    // Read pixel at mouse cursor and decode it to get the point's vertex index
     unsigned char rgba[4] = {0};
     glReadPixels(mouse_x, screen_height - 1 - mouse_y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     if(rgba[3]!=0) {
+        // Decode 24-bit vertex ID from RGBA (24 bits fit in RGB channels)
         picked_id = (rgba[0] << 24) | (rgba[1] << 16) | (rgba[2] << 8) | rgba[3];
         picked_id >>= 8;
         if(picked_id<0) picked_id = 0;
         printf("%x %x %x %x = %09d\n", rgba[0], rgba[1], rgba[2], rgba[3], picked_id);
 
+        // Move camera target to the picked point's XYZ coordinates
         float* picked = &data->data[picked_id*data->cols];
         gui_camera_target_tx = picked[0];
         gui_camera_target_ty = picked[1];
@@ -131,6 +139,7 @@ scene_render(scene_p scene) {
     gui_camera_ty += (gui_camera_target_ty - gui_camera_ty)/10.0;
     gui_camera_tz += (gui_camera_target_tz - gui_camera_tz)/10.0;
 
+    // Compute camera position: rotate offset backward along the view
     vec3 cam_offset = {0.0f, 0.0f, gui_camera_radius};
     vec3 cam_pos;
     glm_quat_rotatev(gui_camera_quat, cam_offset, cam_pos);
@@ -141,6 +150,8 @@ scene_render(scene_p scene) {
     glm_vec3_sub(target_pos, camera_world_pos, view_dir);
     glm_vec3_normalize(view_dir);
 
+    // Gimbal lock fix: compute stable up vector that handles vertical viewing angles
+    // When camera looks straight up/down, the usual up may be parallel to view_dir
     vec3 local_up = {0.0f, 1.0f, 0.0f};
     vec3 rotated_up;
     glm_quat_rotatev(gui_camera_quat, local_up, rotated_up);
@@ -151,10 +162,13 @@ scene_render(scene_p scene) {
 
     vec3 final_up;
     if (right_len < 0.01f) {
+        // Degenerate case: view direction is nearly parallel to rotated_up
+        // Use world right instead to compute stable perpendicular up
         vec3 world_right = {1.0f, 0.0f, 0.0f};
         glm_vec3_cross(world_right, view_dir, final_up);
         glm_vec3_normalize(final_up);
     } else {
+        // Normal case: compute orthonormal up from view_dir and right
         glm_vec3_normalize(right);
         glm_vec3_cross(view_dir, right, final_up);
         glm_vec3_normalize(final_up);

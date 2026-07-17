@@ -412,6 +412,8 @@ void classify_found() {
 }
 
 void
+// Game-style keybinding UI: click button, press key to rebind (uses scancodes, not layout-dependent)
+void
 keyboard_settings_window() {
     if (igBegin("Keyboard Settings", NULL, 0)) {
         igText("Click a button and press a key to rebind:");
@@ -420,6 +422,7 @@ keyboard_settings_window() {
         char buf[32];
         int* rebinding = get_rebinding_target();
 
+        // Each button shows the current scancode and waits for user input when clicked
         sprintf(buf, "Forward: %d%s", key_move_forward, rebinding == &key_move_forward ? " [WAITING]" : "");
         if (igButton(buf, (ImVec2){150, 0})) {
             interactive_start_rebind(&key_move_forward);

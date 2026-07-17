@@ -44,6 +44,7 @@ static void key_callback(
     int scancode,
     int action,
     int mods) {
+    // If user is rebinding a key, capture the next key press and save it
     if (action == GLFW_PRESS && rebinding_target != NULL) {
         *rebinding_target = scancode;
         rebinding_target = NULL;
@@ -52,6 +53,7 @@ static void key_callback(
         return;
     }
 
+    // Track which keys are currently pressed (for game-style continuous movement)
     if (scancode < 256) {
         keys_pressed[scancode] = (action != GLFW_RELEASE);
     }
@@ -83,6 +85,8 @@ static void cursor_position_callback(
 
     if(!gui_focused){
         if(glfwGetMouseButton(win, 1) == GLFW_PRESS) {
+            // Right-drag: quaternion-based orbit rotation around screen axes
+            // Extract screen-aligned axes from camera quaternion to avoid gimbal lock
             vec3 local_up = {0.0f, 1.0f, 0.0f};
             vec3 local_right = {1.0f, 0.0f, 0.0f};
 
@@ -93,6 +97,7 @@ static void cursor_position_callback(
             float angle_horizontal = -dx * 0.005f;
             float angle_vertical = -dy * 0.005f;
 
+            // Build quaternions for horizontal (around screen Y) and vertical (around screen X) rotations
             versor q_h = {
                 sinf(angle_horizontal*0.5f) * screen_up[0],
                 sinf(angle_horizontal*0.5f) * screen_up[1],
@@ -107,10 +112,12 @@ static void cursor_position_callback(
                 cosf(angle_vertical*0.5f)
             };
 
+            // Apply both rotations: horizontal first, then vertical
             versor q_result;
             glm_quat_mul(q_h, gui_camera_quat, q_result);
             glm_quat_mul(q_v, q_result, gui_camera_quat);
         } else if(glfwGetMouseButton(win, 2) == GLFW_PRESS) {
+            // Middle-drag: pan camera in view-space plane (screen-relative)
             vec3 cam_offset = {0.0f, 0.0f, gui_camera_radius};
             vec3 cam_pos;
             glm_quat_rotatev(gui_camera_quat, cam_offset, cam_pos);
@@ -121,6 +128,7 @@ static void cursor_position_callback(
             glm_vec3_sub(target, world_cam_pos, view_dir);
             glm_vec3_normalize(view_dir);
 
+            // Build view-space axes for panning (not world-aligned)
             vec3 local_up = {0.0, 1.0, 0.0};
             vec3 screen_up;
             glm_quat_rotatev(gui_camera_quat, local_up, screen_up);
@@ -133,6 +141,7 @@ static void cursor_position_callback(
             glm_vec3_cross(right, view_dir, up);
             glm_vec3_normalize(up);
 
+            // Pan target in view-space: negative dx moves left, negative dy moves up
             float pan_speed = 0.1;
             gui_camera_target_tx -= right[0] * dx * pan_speed - up[0] * dy * pan_speed;
             gui_camera_target_ty -= right[1] * dx * pan_speed - up[1] * dy * pan_speed;
@@ -178,6 +187,8 @@ static void mouse_scroll_callback(
 void interactive_update(void) {
     if (io->WantCaptureKeyboard || gui_focused) return;
 
+    // Game-style WASD movement: all movement is relative to current camera orientation
+    // Compute camera-space axes from the quaternion to move in local coordinates
     vec3 local_up = {0.0f, 1.0f, 0.0f};
     vec3 local_right = {1.0f, 0.0f, 0.0f};
     vec3 local_forward = {0.0f, 0.0f, 1.0f};
@@ -189,6 +200,7 @@ void interactive_update(void) {
 
     float move_speed = 0.5f;
 
+    // Each key moves the camera target in the corresponding screen-aligned direction
     if (keys_pressed[key_move_forward]) {
         gui_camera_target_tx -= screen_forward[0] * move_speed;
         gui_camera_target_ty -= screen_forward[1] * move_speed;
@@ -221,6 +233,7 @@ void interactive_update(void) {
     }
 }
 
+// Load keybindings from config file (scan codes, not layout-dependent)
 void settings_load(void) {
     FILE* f = fopen(SETTINGS_FILE, "r");
     if (!f) return;
@@ -238,6 +251,7 @@ void settings_load(void) {
     fclose(f);
 }
 
+// Persist keybindings to config file so they survive app restarts
 void settings_save(void) {
     FILE* f = fopen(SETTINGS_FILE, "w");
     if (!f) return;
